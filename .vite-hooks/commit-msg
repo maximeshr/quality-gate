@@ -1,0 +1,1 @@
+node bin/quality-gate.js commitlint --edit "$1"

@@ -1,0 +1,28 @@
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
+
+overrides:
+  vite@*: "catalog:"
+  # Same Vitest copy as `vp test` (vite-plus 1.4.0 bundles 5.0.5).
+  vitest@*: "5.0.5"
+
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
+
+# Let fresh releases settle for 14 days (in minutes).
+minimumReleaseAge: 20160
+minimumReleaseAgeExclude:
+  # vite-plus 1.4.0 (2026-10-23) fixes RUSTSEC-2026-0382/0383/0384. Ages out on 2026-11-06.
+  - vite-plus
+  - "@voidzero-dev/*"
+  - "@oxc-project/*"
+  - "@oxfmt/*"
+  - "@oxlint/*"
+  - oxfmt
+  - oxlint
+  - oxlint-tsgolint
+  - "@oxlint-tsgolint/*"

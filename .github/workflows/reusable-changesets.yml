@@ -1,0 +1,51 @@
+# Every pull request into canary adds a useful changeset. Dependabot pull requests get one
+# written for them (pushed with the deploy key, so the checks run again on the new commit).
+name: Changesets
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "26"
+    secrets:
+      RELEASE_DEPLOY_KEY:
+        description: Write deploy key, needed to add a changeset to Dependabot pull requests.
+        required: false
+
+jobs:
+  changeset:
+    if: github.event_name == 'pull_request' && github.base_ref == 'canary'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          ssh-key: ${{ github.event.pull_request.user.login == 'dependabot[bot]' && secrets.RELEASE_DEPLOY_KEY || '' }}
+      - uses: voidzero-dev/setup-vp@v1.21.2
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: true
+      - run: vp install --frozen-lockfile
+      - name: Resolve the quality-gate CLI
+        run: |
+          if [ "$(jq -r .name package.json)" = "quality-gate" ]; then echo "QG=node bin/quality-gate.js" >> "$GITHUB_ENV"; else echo "QG=vp exec quality-gate" >> "$GITHUB_ENV"; fi
+      - name: Add a changeset to the Dependabot pull request
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if $QG check-changesets --base origin/canary >/dev/null 2>&1; then exit 0; fi
+          name=$(jq -r .name package.json)
+          printf -- '---\n"%s": patch\n---\n\nDependencies: %s.\n' "$name" "$TITLE" > ".changeset/dependabot-$PR.md"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .changeset
+          git commit -m "chore: add changeset for #$PR"
+          git push origin HEAD
+      - name: Check the changesets
+        run: $QG check-changesets --base origin/canary

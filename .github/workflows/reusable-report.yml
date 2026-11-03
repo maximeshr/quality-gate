@@ -1,0 +1,54 @@
+# Runs every quality gate and posts (or updates) one report comment on the pull request.
+# Call it from a project: uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@<tag>
+name: Quality report
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version for the gates.
+        type: string
+        default: "26"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: voidzero-dev/setup-vp@v1.21.2
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: true
+      - run: vp install --frozen-lockfile
+      - name: Install Semgrep
+        run: pipx install semgrep==1.181.0
+      - name: Resolve the quality-gate CLI
+        run: |
+          if [ "$(jq -r .name package.json)" = "quality-gate" ]; then echo "QG=node bin/quality-gate.js" >> "$GITHUB_ENV"; else echo "QG=vp exec quality-gate" >> "$GITHUB_ENV"; fi
+      - name: Run the quality gates
+        id: gates
+        continue-on-error: true
+        run: $QG report quality-report.md
+      - name: Job summary
+        if: always()
+        run: cat quality-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Post or update the pull request comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- quality-gate-report -->")) | .id' | head -n1)
+          body=$(jq -Rs '{body: .}' quality-report.md)
+          if [ -n "$id" ]; then
+            echo "$body" | gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" --input - >/dev/null
+          else
+            echo "$body" | gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --input - >/dev/null
+          fi
+      - name: Fail if a gate failed
+        if: steps.gates.outcome == 'failure'
+        run: exit 1
