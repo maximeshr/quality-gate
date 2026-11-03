@@ -16,7 +16,8 @@
     "bin",
     "configs",
     "scripts",
-    "src"
+    "src",
+    "templates"
   ],
   "type": "module",
   "exports": {
