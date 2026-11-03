@@ -10,6 +10,9 @@ const ignored = ["dist/**", "coverage/**", "pnpm-lock.yaml", "CHANGELOG.md"];
 export const qualityGate = Object.freeze({
   lint: {
     ignorePatterns: [...ignored],
+    // Import from vite-plus (`vite-plus`, `vite-plus/test`), never from vite or vitest directly.
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: {
       // Type-aware rules (no-floating-promises, ...) and a full type check.
       typeAware: true,
