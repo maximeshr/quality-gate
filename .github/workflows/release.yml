@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  push:
+    branches: [canary, main]
+
+concurrency: release-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  release-pr:
+    if: github.ref_name == 'canary'
+    uses: ./.github/workflows/reusable-release-pr.yml
+    permissions:
+      contents: read
+      pull-requests: write
+  release:
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/reusable-release.yml
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    with:
+      publish: false
+    secrets:
+      RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}

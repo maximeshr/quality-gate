@@ -1,0 +1,48 @@
+# On every push to canary: open or update the canary → main release pull request,
+# with the full release notes (pending changesets, pull requests, commits).
+name: Release pull request
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "26"
+
+jobs:
+  release-pr:
+    if: github.event_name == 'push' && github.ref_name == 'canary'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1.21.2
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: true
+      - run: vp install --frozen-lockfile
+      - name: Resolve the quality-gate CLI
+        run: |
+          if [ "$(jq -r .name package.json)" = "quality-gate" ]; then echo "QG=node bin/quality-gate.js" >> "$GITHUB_ENV"; else echo "QG=vp exec quality-gate" >> "$GITHUB_ENV"; fi
+      - name: Open or update the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh pr list --head canary --base main --state open --json number --jq '.[0].number // empty')
+          if ! [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md -print -quit 2>/dev/null)" ]; then
+            echo "No pending changeset: nothing to release."
+            exit 0
+          fi
+          vp exec changeset status --output status.json >/dev/null
+          title=$(jq -r '"Release " + ([.releases[] | select(.type != "none") | "\(.name)@\(.newVersion)"] | join(", "))' status.json)
+          $QG release-notes --from origin/main --to HEAD --repo "$GITHUB_REPOSITORY" --output notes.md
+          printf '\n---\nMerge with a **merge commit** (not squash): canary and main keep the same commits. Merging releases to production.\n' >> notes.md
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body-file notes.md
+          else
+            gh pr create --base main --head canary --title "$title" --body-file notes.md
+          fi
