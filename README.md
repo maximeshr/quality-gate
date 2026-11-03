@@ -13,7 +13,7 @@ The base configuration only changes when a rule is wrong for every project. A pr
 | Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with `vite-plus/prefer-vite-plus-imports`, TypeScript) | `quality-gate/vite`                                   |
 | Tests + coverage               | `vp test --coverage`                                                                                        | `quality-gate/vite`                                   |
 | Dead code, unused dependencies | Knip                                                                                                        | zero-config (`knip.json` only for structural entries) |
-| Duplication                    | jscpd, 5 % threshold on `src/`                                                                              | `configs/jscpd.json`                                  |
+| Duplication                    | jscpd on `src/` (Markdown excluded): fails above 5 % duplicated, not on each clone                          | `configs/jscpd.json`                                  |
 | Secrets                        | secretlint, recommended preset                                                                              | `configs/secretlintrc.json`                           |
 | SAST                           | Semgrep `p/typescript` + `p/nodejs` (CI only)                                                               | —                                                     |
 | Build                          | `vp run build`, when the project has a `build` script                                                       | the project                                           |
