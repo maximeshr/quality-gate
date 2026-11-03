@@ -33,16 +33,16 @@ export function pendingChangesets(dir = ".changeset") {
 }
 
 /**
- * Internal pull requests (CI, tooling) need no changeset: Conventional Commits types `ci`,
- * `build`, `test` and `chore`. `chore(deps)` is not internal: a runtime dependency update
- * reaches users (`chore(deps-dev)` does not).
+ * Internal pull requests (CI, tooling, docs) need no changeset: Conventional Commits types
+ * `ci`, `build`, `test`, `docs` and `chore`. `chore(deps)` is not internal: a runtime
+ * dependency update reaches users (`chore(deps-dev)` does not).
  */
 export function isInternal(title = "") {
   const match = /^(\w+)(?:\(([^)]*)\))?!?:/.exec(title.trim());
   if (!match) return false;
   const [, type, scope] = match;
   if (type === "chore") return scope !== "deps";
-  return ["ci", "build", "test"].includes(type ?? "");
+  return ["ci", "build", "test", "docs"].includes(type ?? "");
 }
 
 /**

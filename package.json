@@ -31,11 +31,13 @@
     "prepare": "vp config"
   },
   "dependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.7",
     "jscpd": "5.4.1",
     "knip": "6.42.1",
+    "publint": "0.3.25",
     "secretlint": "13.0.7"
   },
   "devDependencies": {
