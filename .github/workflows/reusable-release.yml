@@ -1,0 +1,79 @@
+# On push to main (the merged release pull request): version + CHANGELOG, optional npm
+# publish, tag, GitHub release with the full notes, then main back into canary.
+# Pushes use the deploy key, the only actor allowed to bypass the branch ruleset.
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "26"
+      publish:
+        description: Publish to npm (with provenance). Leave false for private packages and apps.
+        type: boolean
+        default: false
+    secrets:
+      RELEASE_DEPLOY_KEY:
+        description: Write deploy key, bypass actor of the canary/main ruleset.
+        required: true
+
+jobs:
+  release:
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+      - name: Pending changesets
+        id: pending
+        run: |
+          if [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md -print -quit 2>/dev/null)" ]; then echo "release=true" >> "$GITHUB_OUTPUT"; else echo "No pending changeset: nothing to release."; fi
+      - uses: voidzero-dev/setup-vp@v1.21.2
+        if: steps.pending.outputs.release == 'true'
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: true
+      - if: steps.pending.outputs.release == 'true'
+        run: vp install --frozen-lockfile
+      - name: Resolve the quality-gate CLI
+        if: steps.pending.outputs.release == 'true'
+        run: |
+          if [ "$(jq -r .name package.json)" = "quality-gate" ]; then echo "QG=node bin/quality-gate.js" >> "$GITHUB_ENV"; else echo "QG=vp exec quality-gate" >> "$GITHUB_ENV"; fi
+      - name: Version, tag and GitHub release
+        if: steps.pending.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ inputs.publish }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          previous=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          $QG release-notes --from "$previous" --to HEAD --repo "$GITHUB_REPOSITORY" --output notes.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          vp exec changeset version
+          version=$(jq -r .version package.json)
+          git add -A
+          git commit -m "chore(release): v$version"
+          git push origin HEAD:main
+
+          if [ "$PUBLISH" = "true" ]; then vp exec changeset publish --no-git-tag; fi
+
+          git tag "v$version"
+          git push origin "v$version"
+          gh release create "v$version" --title "v$version" --notes-file notes.md
+
+          git fetch origin canary
+          if git merge-base --is-ancestor origin/canary HEAD; then
+            git push origin HEAD:canary
+          else
+            gh pr create --base canary --head main --title "chore: bring v$version back into canary" \
+              --body "Release v$version is on main. canary has moved since the release pull request, so it cannot be fast-forwarded: merge this pull request (merge commit) to keep both branches in sync."
+          fi

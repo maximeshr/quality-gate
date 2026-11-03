@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [canary, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    uses: ./.github/workflows/reusable-report.yml
+    permissions:
+      contents: read
+      pull-requests: write
+  changesets:
+    uses: ./.github/workflows/reusable-changesets.yml
+    permissions:
+      contents: read
+    secrets:
+      RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
