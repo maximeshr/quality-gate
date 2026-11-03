@@ -2,12 +2,8 @@
 
 ### Minor changes
 
-- Internal pull requests no longer need a changeset: `check-changesets --title` (and `reusable-changesets.yml`) exempts Conventional Commits titles `ci`, `build`, `test` and `chore`, except `chore(deps)`, since runtime dependency updates reach users. The README now lists what a project must add: `@vitest/coverage-v8` at the bundled Vitest version, and `allowBuilds: { quality-gate: false }`.
-
-### Pull requests
-
-- #6 feat: exempt internal pull requests from changesets (maximeshr)
+- Release hardening. `reusable-release.yml` takes a `publish-script` input (default `vp run release`, so libraries keep their build and package checks before publishing), publishes before pushing the release commit (a failed publish can be rerun), and no longer fails when the tag already exists. New CLI commands `check-version` and `check-package` replace the `scripts/check-*.mjs` copies in each library. `docs` pull requests are now internal: no changeset required. The README documents the scripts baseline, npm trusted publishing, and protection for every repository.
 
 ### Commits
 
-- `f71e744` feat: exempt internal pull requests from changesets (#6) (Maxime Sahroui)
+- `65ccf42` feat: harden the release and add check-version and check-package (#8) (#9) (github-actions[bot])
