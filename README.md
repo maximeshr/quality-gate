@@ -8,15 +8,15 @@ The base configuration only changes when a rule is wrong for every project. A pr
 
 ## Gates
 
-| Gate                           | Tool                                                              | Config                                                |
-| ------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------- |
-| Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint, TypeScript) | `quality-gate/vite`                                   |
-| Tests + coverage               | `vp test --coverage`                                              | `quality-gate/vite`                                   |
-| Dead code, unused dependencies | Knip                                                              | zero-config (`knip.json` only for structural entries) |
-| Duplication                    | jscpd, 5 % threshold on `src/`                                    | `configs/jscpd.json`                                  |
-| Secrets                        | secretlint, recommended preset                                    | `configs/secretlintrc.json`                           |
-| SAST                           | Semgrep `p/typescript` + `p/nodejs` (CI only)                     | —                                                     |
-| Build                          | `vp run build`, when the project has a `build` script             | the project                                           |
+| Gate                           | Tool                                                                                                        | Config                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with `vite-plus/prefer-vite-plus-imports`, TypeScript) | `quality-gate/vite`                                   |
+| Tests + coverage               | `vp test --coverage`                                                                                        | `quality-gate/vite`                                   |
+| Dead code, unused dependencies | Knip                                                                                                        | zero-config (`knip.json` only for structural entries) |
+| Duplication                    | jscpd, 5 % threshold on `src/`                                                                              | `configs/jscpd.json`                                  |
+| Secrets                        | secretlint, recommended preset                                                                              | `configs/secretlintrc.json`                           |
+| SAST                           | Semgrep `p/typescript` + `p/nodejs` (CI only)                                                               | —                                                     |
+| Build                          | `vp run build`, when the project has a `build` script                                                       | the project                                           |
 
 Commit messages follow Conventional Commits (`configs/commitlint.config.js`). The report runs every gate even when one fails, and lists each failure with its output.
 
@@ -25,7 +25,7 @@ Commit messages follow Conventional Commits (`configs/commitlint.config.js`). Th
 ### 1. Install
 
 ```sh
-vp add -D "quality-gate@github:maximeshr/quality-gate#v0.3.0" @vitest/coverage-v8@<vitest version>
+vp add -D "quality-gate@github:maximeshr/quality-gate#v0.4.0" @vitest/coverage-v8@<vitest version>
 ```
 
 - `@vitest/coverage-v8` must be the Vitest version bundled with vite-plus (`vp toolchain vitest`): the base config collects coverage, and Vitest loads the provider from the project.
@@ -92,12 +92,12 @@ permissions:
   contents: read
 jobs:
   report:
-    uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@v0.3.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@v0.4.0
     permissions:
       contents: read
       pull-requests: write
   changesets:
-    uses: maximeshr/quality-gate/.github/workflows/reusable-changesets.yml@v0.3.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-changesets.yml@v0.4.0
     permissions:
       contents: read
     secrets:
@@ -105,6 +105,17 @@ jobs:
 ```
 
 A project still on `main` only (before adopting the branch flow) keeps `pull_request:` without a branch filter and only the `report` job.
+
+When `vp check` needs generated files that a fresh checkout does not have (Astro content types, Next.js route types), pass a `setup` command to the report; it runs first and shows as its own gate:
+
+```yaml
+report:
+  uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@v0.4.0
+  with:
+    setup: vp run astro sync
+```
+
+Locally: `vp exec quality-gate report --setup "vp run astro sync"`.
 
 ### 5. Scripts
 
@@ -159,13 +170,13 @@ permissions:
 jobs:
   release-pr:
     if: github.ref_name == 'canary'
-    uses: maximeshr/quality-gate/.github/workflows/reusable-release-pr.yml@v0.3.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-release-pr.yml@v0.4.0
     permissions:
       contents: read
       pull-requests: write
   release:
     if: github.ref_name == 'main'
-    uses: maximeshr/quality-gate/.github/workflows/reusable-release.yml@v0.3.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-release.yml@v0.4.0
     permissions:
       contents: write
       pull-requests: write
@@ -195,7 +206,7 @@ These settings apply to public and private repositories alike (rulesets on priva
 ## CLI
 
 ```text
-quality-gate report [file]                 run every gate, write a Markdown report (default quality-report.md)
+quality-gate report [file] [--setup "cmd"] run every gate, write a Markdown report (default quality-report.md); --setup runs first
 quality-gate secrets [files...]            secretlint with the base config
 quality-gate deadcode                      knip
 quality-gate duplication                   jscpd with the base config

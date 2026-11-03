@@ -56,8 +56,8 @@ const option = (name, fallback) => {
 
 switch (subcommand) {
   case "report": {
-    const output = args[0] ?? "quality-report.md";
-    const { markdown, failed } = report({ tools });
+    const output = args[0] && !args[0].startsWith("--") ? args[0] : "quality-report.md";
+    const { markdown, failed } = report({ tools, setup: option("setup") });
     writeFileSync(output, markdown);
     process.stdout.write(markdown);
     process.exit(failed ? 1 : 0);
@@ -109,7 +109,8 @@ switch (subcommand) {
   default:
     console.log(`Usage: quality-gate <command>
 
-  report [file]                 run every gate, write a Markdown report (default quality-report.md)
+  report [file] [--setup "cmd"] run every gate, write a Markdown report (default quality-report.md);
+                                --setup runs first, e.g. to generate framework types
   secrets [files...]            secretlint with the base config
   deadcode                      knip
   duplication                   jscpd with the base config

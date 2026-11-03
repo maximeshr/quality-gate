@@ -52,9 +52,13 @@ const display = (command, args) =>
     .map((part) => part.replace(`${process.cwd()}/`, "").replace(/^.*node_modules\//, ""))
     .join(" ");
 
-/** @param {{ tools: Record<string, (...args: any[]) => [string, string[]]> }} options */
-export function report({ tools }) {
+/**
+ * @param {{ tools: Record<string, (...args: any[]) => [string, string[]]>, setup?: string }} options
+ *   `setup` runs before the gates (e.g. `vp run astro sync` to generate the types `vp check` needs).
+ */
+export function report({ tools, setup }) {
   const gates = [
+    ...(setup ? [{ label: "Setup", command: ["sh", ["-c", setup]] }] : []),
     { label: "Format + lint + types", command: ["vp", ["check", "--deny-warnings"]] },
     { label: "Tests + coverage", command: ["vp", ["test", "--coverage"]] },
     { label: "Dead code / unused deps", command: tools.deadcode() },

@@ -9,6 +9,10 @@ on:
         description: Node.js version for the gates.
         type: string
         default: "26"
+      setup:
+        description: Command run before the gates, e.g. `vp run astro sync` to generate the types `vp check` needs.
+        type: string
+        default: ""
 
 jobs:
   report:
@@ -31,7 +35,10 @@ jobs:
       - name: Run the quality gates
         id: gates
         continue-on-error: true
-        run: $QG report quality-report.md
+        env:
+          SETUP: ${{ inputs.setup }}
+        run: |
+          if [ -n "$SETUP" ]; then $QG report quality-report.md --setup "$SETUP"; else $QG report quality-report.md; fi
       - name: Job summary
         if: always()
         run: cat quality-report.md >> "$GITHUB_STEP_SUMMARY"
