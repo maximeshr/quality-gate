@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": [
+    "@arethetypeswrong/cli",
     "@commitlint/cli",
     "@secretlint/secretlint-rule-preset-recommend",
     "jscpd",

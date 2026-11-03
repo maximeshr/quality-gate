@@ -13,6 +13,10 @@ on:
         description: Publish to npm (with provenance). Leave false for private packages and apps.
         type: boolean
         default: false
+      publish-script:
+        description: Command that builds, checks and publishes (npm trusted publishing, OIDC).
+        type: string
+        default: vp run release
     secrets:
       RELEASE_DEPLOY_KEY:
         description: Write deploy key, bypass actor of the canary/main ruleset.
@@ -51,6 +55,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PUBLISH: ${{ inputs.publish }}
+          PUBLISH_SCRIPT: ${{ inputs.publish-script }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
           previous=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
@@ -62,11 +67,14 @@ jobs:
           version=$(jq -r .version package.json)
           git add -A
           git commit -m "chore(release): v$version"
+
+          # Publish before pushing: if publishing fails, main keeps its changesets and a rerun
+          # releases again. The script builds, checks the package (`check:package`), publishes.
+          if [ "$PUBLISH" = "true" ]; then sh -c "$PUBLISH_SCRIPT"; fi
           git push origin HEAD:main
 
-          if [ "$PUBLISH" = "true" ]; then vp exec changeset publish --no-git-tag; fi
-
-          git tag "v$version"
+          # `changeset publish` may have tagged already.
+          git rev-parse -q --verify "refs/tags/v$version" >/dev/null || git tag "v$version"
           git push origin "v$version"
           gh release create "v$version" --title "v$version" --notes-file notes.md
 

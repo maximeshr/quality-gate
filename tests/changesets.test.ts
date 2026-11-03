@@ -97,7 +97,7 @@ describe("isInternal", () => {
     ["chore(deps): bump execa from 10.1.1 to 10.2.1", false],
     ["feat: add the report", false],
     ["fix(cli): exit with 1 on failure", false],
-    ["docs: explain the flow", false],
+    ["docs: explain the flow", true],
     ["Update README", false],
     [undefined, false],
   ])("%s → %s", (title, expected) => {

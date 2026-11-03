@@ -8,6 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { checkChangesets, isInternal } from "../scripts/changesets.js";
+import { checkPackage } from "../scripts/check-package.js";
+import { checkVersion } from "../scripts/check-version.js";
 import { releaseNotes } from "../scripts/release-notes.js";
 import { report } from "../scripts/report.js";
 
@@ -75,11 +77,23 @@ switch (subcommand) {
     if (errors.length === 0) {
       console.log(
         isInternal(title)
-          ? "✔ internal pull request (ci, build, test, chore): no changeset required"
+          ? "✔ internal pull request (ci, build, test, docs, chore): no changeset required"
           : "✔ changesets are present and useful",
       );
     }
     process.exit(errors.length === 0 ? 0 : 1);
+  }
+  case "check-version": {
+    const error = await checkVersion();
+    if (error) console.error(error);
+    process.exit(error ? 1 : 0);
+  }
+  case "check-package": {
+    const ok = await checkPackage({
+      attwBin: toolBin("@arethetypeswrong/cli", "attw"),
+      profile: option("profile", "esm-only"),
+    });
+    process.exit(ok ? 0 : 1);
   }
   case "release-notes": {
     const markdown = releaseNotes({
@@ -102,6 +116,8 @@ switch (subcommand) {
   commitlint [args...]          commitlint with the conventional config (e.g. --edit "$1")
   check-changesets [--base ref] [--title "PR title"]
                                 fail if the branch adds no useful changeset (internal PRs exempt)
+  check-version                 fail if the package.json version was edited by hand
+  check-package [--profile p]   pack, then publint (strict) and attw (default profile esm-only)
   release-notes [--from ref] [--to ref] [--repo owner/name] [--output file]`);
     process.exit(subcommand ? 1 : 0);
 }
