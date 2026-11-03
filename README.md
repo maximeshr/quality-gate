@@ -23,8 +23,16 @@ Commit messages follow Conventional Commits (`configs/commitlint.config.js`).
 ## Use it in a project
 
 ```sh
-vp add -D "quality-gate@github:maximeshr/quality-gate#v0.1.0"
+vp add -D "quality-gate@github:maximeshr/quality-gate#v0.2.0" @vitest/coverage-v8@<vitest version>
 ```
+
+- `@vitest/coverage-v8` must be the Vitest version bundled with vite-plus (`vp toolchain vitest`): the base config collects coverage, and Vitest loads the provider from the project.
+- quality-gate's `prepare` script only installs its own git hooks. pnpm refuses to install a git dependency that wants to run it, so declare it in `pnpm-workspace.yaml`:
+
+  ```yaml
+  allowBuilds:
+    quality-gate: false
+  ```
 
 `vite.config.ts`:
 
@@ -67,12 +75,12 @@ permissions:
   contents: read
 jobs:
   report:
-    uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@v0.1.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@v0.2.0
     permissions:
       contents: read
       pull-requests: write
   changesets:
-    uses: maximeshr/quality-gate/.github/workflows/reusable-changesets.yml@v0.1.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-changesets.yml@v0.2.0
     permissions:
       contents: read
     secrets:
@@ -86,6 +94,7 @@ Run the report locally: `vp exec quality-gate report`.
 - `canary` is the default branch: every pull request targets it. `main` is production.
 - Public repositories protect both branches with a ruleset (no deletion, no force-push, pull request and CI required). The only bypass actor is the release deploy key.
 - Every pull request into `canary` adds a useful changeset (`vp exec changeset`): a bump and a summary of at least 20 characters written for a user. Dependabot pull requests get one automatically.
+- Internal pull requests (CI, tooling) are exempt. They are recognized by their Conventional Commits title: `ci`, `build`, `test` and `chore`, except `chore(deps)` (a runtime dependency update reaches users; `chore(deps-dev)` does not). A changeset they add anyway is still checked.
 - On every push to `canary`, `reusable-release-pr.yml` opens or updates the `canary` → `main` pull request with the full release notes: pending changesets grouped by bump, pull requests and commits.
 - Merge it with a **merge commit**. On `main`, `reusable-release.yml` versions the package, updates `CHANGELOG.md`, publishes to npm when `publish: true`, tags `vX.Y.Z`, creates the GitHub release with the same notes, and fast-forwards `canary` (or opens a `main` → `canary` pull request when `canary` has moved).
 

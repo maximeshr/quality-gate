@@ -32,8 +32,26 @@ export function pendingChangesets(dir = ".changeset") {
     }));
 }
 
-/** Errors for the changesets added on this branch compared to `base`; empty when they are fine. */
-export function checkChangesets({ base }) {
+/**
+ * Internal pull requests (CI, tooling) need no changeset: Conventional Commits types `ci`,
+ * `build`, `test` and `chore`. `chore(deps)` is not internal: a runtime dependency update
+ * reaches users (`chore(deps-dev)` does not).
+ */
+export function isInternal(title = "") {
+  const match = /^(\w+)(?:\(([^)]*)\))?!?:/.exec(title.trim());
+  if (!match) return false;
+  const [, type, scope] = match;
+  if (type === "chore") return scope !== "deps";
+  return ["ci", "build", "test"].includes(type ?? "");
+}
+
+/**
+ * Errors for the changesets added on this branch compared to `base`; empty when they are fine.
+ * An internal pull request (see `isInternal`) may add none, but what it adds is still checked.
+ *
+ * @param {{ base: string, title?: string }} options
+ */
+export function checkChangesets({ base, title }) {
   const diff = spawnSync(
     "git",
     ["diff", "--name-only", "--diff-filter=AM", `${base}...HEAD`, "--", ".changeset/"],
@@ -47,6 +65,7 @@ export function checkChangesets({ base }) {
     .split("\n")
     .filter((file) => file.endsWith(".md") && !file.endsWith("README.md"));
   if (files.length === 0) {
+    if (isInternal(title)) return [];
     return [
       `This pull request adds no changeset. Run \`vp exec changeset\`, pick the bump, and describe the change for a user (at least ${MIN_SUMMARY_LENGTH} characters).`,
     ];

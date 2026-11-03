@@ -1,4 +1,5 @@
-# Every pull request into canary adds a useful changeset. Dependabot pull requests get one
+# Every pull request into canary adds a useful changeset, except internal ones (ci, build, test,
+# chore but not chore(deps): see scripts/changesets.js). Dependabot pull requests get one
 # written for them (pushed with the deploy key, so the checks run again on the new commit).
 name: Changesets
 
@@ -39,7 +40,7 @@ jobs:
           TITLE: ${{ github.event.pull_request.title }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          if $QG check-changesets --base origin/canary >/dev/null 2>&1; then exit 0; fi
+          if $QG check-changesets --base origin/canary --title "$TITLE" >/dev/null 2>&1; then exit 0; fi
           name=$(jq -r .name package.json)
           printf -- '---\n"%s": patch\n---\n\nDependencies: %s.\n' "$name" "$TITLE" > ".changeset/dependabot-$PR.md"
           git config user.name "github-actions[bot]"
@@ -48,4 +49,6 @@ jobs:
           git commit -m "chore: add changeset for #$PR"
           git push origin HEAD
       - name: Check the changesets
-        run: $QG check-changesets --base origin/canary
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: $QG check-changesets --base origin/canary --title "$TITLE"

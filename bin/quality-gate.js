@@ -7,7 +7,7 @@ import { findPackageJSON } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { checkChangesets } from "../scripts/changesets.js";
+import { checkChangesets, isInternal } from "../scripts/changesets.js";
 import { releaseNotes } from "../scripts/release-notes.js";
 import { report } from "../scripts/report.js";
 
@@ -69,9 +69,16 @@ switch (subcommand) {
   case "commitlint":
     process.exit(run(tools.commitlint(args)));
   case "check-changesets": {
-    const errors = checkChangesets({ base: option("base", "origin/canary") });
+    const title = option("title");
+    const errors = checkChangesets({ base: option("base", "origin/canary"), title });
     for (const error of errors) console.error(`✖ ${error}`);
-    if (errors.length === 0) console.log("✔ changesets are present and useful");
+    if (errors.length === 0) {
+      console.log(
+        isInternal(title)
+          ? "✔ internal pull request (ci, build, test, chore): no changeset required"
+          : "✔ changesets are present and useful",
+      );
+    }
     process.exit(errors.length === 0 ? 0 : 1);
   }
   case "release-notes": {
@@ -93,7 +100,8 @@ switch (subcommand) {
   deadcode                      knip
   duplication                   jscpd with the base config
   commitlint [args...]          commitlint with the conventional config (e.g. --edit "$1")
-  check-changesets [--base ref] fail if the branch adds no useful changeset
+  check-changesets [--base ref] [--title "PR title"]
+                                fail if the branch adds no useful changeset (internal PRs exempt)
   release-notes [--from ref] [--to ref] [--repo owner/name] [--output file]`);
     process.exit(subcommand ? 1 : 0);
 }

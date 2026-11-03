@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
-import { checkChangesets, parseChangeset } from "../scripts/changesets.js";
+import { checkChangesets, isInternal, parseChangeset } from "../scripts/changesets.js";
 import { releaseNotes } from "../scripts/release-notes.js";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -83,5 +83,24 @@ describe("checkChangesets and releaseNotes", () => {
     );
     expect(notes).not.toContain("### Patch changes");
     expect(notes).toMatch(/### Commits\n\n- `[0-9a-f]+` chore: useful\.md \(Test\)/);
+  });
+});
+
+describe("isInternal", () => {
+  test.each([
+    ["ci: run pull request checks on canary only", true],
+    ["build: bump the node runtime", true],
+    ["test: cover the report", true],
+    ["chore: adopt the OKQ quality gate", true],
+    ["chore(deps-dev): bump knip from 6.42.1 to 6.44.1", true],
+    ["ci(deps): bump the actions group with 2 updates", true],
+    ["chore(deps): bump execa from 10.1.1 to 10.2.1", false],
+    ["feat: add the report", false],
+    ["fix(cli): exit with 1 on failure", false],
+    ["docs: explain the flow", false],
+    ["Update README", false],
+    [undefined, false],
+  ])("%s → %s", (title, expected) => {
+    expect(isInternal(title)).toBe(expected);
   });
 });
