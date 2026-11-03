@@ -1,5 +1,11 @@
 # quality-gate
 
+## 0.5.0
+
+### Minor Changes
+
+- c7a743c: README and CONTRIBUTING templates ship in `templates/`: one README per project type (library, command-line tool, app), following Standard Readme, and the shared contributing guide (branches, commits, changesets, releases). quality-gate's own README follows the same structure.
+
 ## 0.4.0
 
 ### Minor Changes
