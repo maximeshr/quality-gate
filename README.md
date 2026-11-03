@@ -60,6 +60,7 @@ vp exec quality-gate duplication
 name: CI
 on:
   pull_request:
+    branches: [canary]
   push:
     branches: [canary, main]
 permissions:
