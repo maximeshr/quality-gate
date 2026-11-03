@@ -1,5 +1,12 @@
 # quality-gate
 
+## 0.1.1
+
+### Patch Changes
+
+- c23596d: CI runs pull request checks only on pull requests into `canary`. The release pull request into `main` no longer gets a failed run: its head is `canary`, already checked on push.
+- 431f90b: Dependabot keeps the npm dependencies and GitHub Actions up to date on `canary`, with the same 14-day cooldown as pnpm, and a weekly `pnpm audit` covers the security alerts Dependabot cannot raise on a pnpm 12 lockfile.
+
 ## 0.1.0
 
 ### Minor Changes
