@@ -1,9 +1,17 @@
 ## Release notes
 
-### Minor changes
+### Patch changes
 
-- Release hardening. `reusable-release.yml` takes a `publish-script` input (default `vp run release`, so libraries keep their build and package checks before publishing), publishes before pushing the release commit (a failed publish can be rerun), and no longer fails when the tag already exists. New CLI commands `check-version` and `check-package` replace the `scripts/check-*.mjs` copies in each library. `docs` pull requests are now internal: no changeset required. The README documents the scripts baseline, npm trusted publishing, and protection for every repository.
+- Safer releases. The release pull request is closed when `canary` has no pending changeset anymore, so an already released changeset cannot be released twice. The bot's commits and pushes skip the project's git hooks. The README documents two rulesets: `main` only allows merge commits, since a squashed release pull request cannot fast-forward `canary`.
+
+### Pull requests
+
+- #8 feat: harden the release and add check-version and check-package (maximeshr)
+- #12 fix: keep releases consistent after a squashed release pull request (maximeshr)
+- #13 docs: merge commits only, squash and rebase disabled (maximeshr)
 
 ### Commits
 
-- `65ccf42` feat: harden the release and add check-version and check-package (#8) (#9) (github-actions[bot])
+- `68d58c1` docs: merge commits only, squash and rebase disabled (Maxime Sahroui)
+- `b1dfcd7` fix: keep releases consistent after a squashed release pull request (#12) (Maxime Sahroui)
+- `56b5f43` feat: harden the release and add check-version and check-package (#8) (Maxime Sahroui)
