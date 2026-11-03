@@ -1,17 +1,19 @@
 ## Release notes
 
+### Minor changes
+
+- The base lint config enforces `vite-plus/prefer-vite-plus-imports`: import from `vite-plus` and `vite-plus/test`, never from `vite` or `vitest` directly. The report takes an optional setup command (`report --setup "<cmd>"`, `setup` input of `reusable-report.yml`) that runs before the gates, for frameworks whose types are generated (`vp run astro sync`). pnpm moves to 12.16.1.
+
 ### Patch changes
 
-- Safer releases. The release pull request is closed when `canary` has no pending changeset anymore, so an already released changeset cannot be released twice. The bot's commits and pushes skip the project's git hooks. The README documents two rulesets: `main` only allows merge commits, since a squashed release pull request cannot fast-forward `canary`.
+- The duplication gate now fails only when more than 5 % of the code is duplicated, as the configuration intends, instead of on every clone found. Markdown and MDX files (blog posts, docs) are no longer scanned: code samples in prose are not project code.
 
 ### Pull requests
 
-- #8 feat: harden the release and add check-version and check-package (maximeshr)
-- #12 fix: keep releases consistent after a squashed release pull request (maximeshr)
-- #13 docs: merge commits only, squash and rebase disabled (maximeshr)
+- #14 feat: report setup step and the vite-plus imports rule (maximeshr)
+- #16 fix: apply the 5 % duplication threshold and skip Markdown (maximeshr)
 
 ### Commits
 
-- `68d58c1` docs: merge commits only, squash and rebase disabled (Maxime Sahroui)
-- `b1dfcd7` fix: keep releases consistent after a squashed release pull request (#12) (Maxime Sahroui)
-- `56b5f43` feat: harden the release and add check-version and check-package (#8) (Maxime Sahroui)
+- `8aac592` fix: apply the 5 % duplication threshold and skip Markdown (Maxime Sahroui)
+- `25cc61e` feat: report setup step and the vite-plus imports rule (Maxime Sahroui)
