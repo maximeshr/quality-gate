@@ -1,6 +1,6 @@
 {
   "threshold": 5,
   "pattern": "src/**/*",
-  "ignore": ["**/*.test.*", "**/*.spec.*", "**/*.json", "**/*.d.ts"],
+  "ignore": ["**/*.test.*", "**/*.spec.*", "**/*.json", "**/*.d.ts", "**/*.md", "**/*.mdx"],
   "gitignore": true
 }

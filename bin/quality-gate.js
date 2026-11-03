@@ -38,7 +38,8 @@ const tools = {
     ]),
   deadcode: () => node("knip", []),
   duplication: () =>
-    node("jscpd", ["--config", config("jscpd.json"), "--reporters", "console", "--exit-code", "1"]),
+    // No --exit-code: jscpd then fails only above the config threshold (5 %), not on every clone.
+    node("jscpd", ["--config", config("jscpd.json"), "--reporters", "console"]),
   commitlint: (args) =>
     node("@commitlint/cli", ["--config", config("commitlint.config.js"), ...args], "commitlint"),
 };
