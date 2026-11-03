@@ -26,6 +26,9 @@ jobs:
   release:
     if: github.event_name == 'push' && github.ref_name == 'main'
     runs-on: ubuntu-latest
+    env:
+      # Bot commits and pushes skip the project's git hooks (`vp install` installs them).
+      VP_GIT_HOOKS: "0"
     permissions:
       contents: write
       pull-requests: write
