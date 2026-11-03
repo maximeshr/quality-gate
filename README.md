@@ -1,12 +1,28 @@
 # quality-gate
 
+[![CI](https://github.com/maximeshr/quality-gate/actions/workflows/ci.yml/badge.svg?branch=canary)](https://github.com/maximeshr/quality-gate/actions/workflows/ci.yml)
+
 Shared quality gate for OKQ projects: one Vite+ (`vp`) base configuration, one CLI, and reusable GitHub Actions workflows that post a quality report on every pull request and run the `canary` → `main` release flow.
 
-## Rule
+It is the shared stack of the OKQ projects: every project spreads the same base configuration, runs the same gates locally (git hooks) and in CI (one report comment per pull request), and releases through the same `canary` → `main` flow.
+
+## Table of contents
+
+- [Background](#background)
+- [Install](#install)
+- [Usage](#usage)
+- [Branches and releases](#branches-and-releases)
+- [API](#api)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Background
+
+### Rule
 
 The base configuration only changes when a rule is wrong for every project. A project that fails the gate is fixed in that project, not by loosening the base. A project may only add what its structure needs: build entries, test paths and timeouts, generated or vendored folders to ignore, and Knip entries Knip cannot find on its own.
 
-## Gates
+### Gates
 
 | Gate                           | Tool                                                                                                        | Config                                                |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
@@ -20,9 +36,7 @@ The base configuration only changes when a rule is wrong for every project. A pr
 
 Commit messages follow Conventional Commits (`configs/commitlint.config.js`). The report runs every gate even when one fails, and lists each failure with its output.
 
-## Adopt it in a project
-
-### 1. Install
+## Install
 
 ```sh
 vp add -D "quality-gate@github:maximeshr/quality-gate#v0.4.0" @vitest/coverage-v8@<vitest version>
@@ -39,7 +53,9 @@ vp add -D "quality-gate@github:maximeshr/quality-gate#v0.4.0" @vitest/coverage-v
 
 The tools (Knip, jscpd, secretlint, commitlint) are dependencies of quality-gate: the project does not add them.
 
-### 2. `vite.config.ts`
+## Usage
+
+### `vite.config.ts`
 
 Spread the base config, then add only what the project's structure needs:
 
@@ -59,7 +75,7 @@ export default defineConfig({
 
 Remove the project's own `lint` and `fmt` blocks: they come from the base. Use `defineQualityGate({ ignore: [".astro/**"] })` instead of `qualityGate` to ignore generated folders.
 
-### 3. Git hooks
+### Git hooks
 
 Add `"prepare": "vp config"` to the `package.json` scripts: `vp install` then installs the hooks from `.vite-hooks/`.
 
@@ -77,7 +93,7 @@ vp exec quality-gate duplication
 
 `vp staged` runs secretlint and `vp check --fix --deny-warnings` on the staged files (the `staged` block of the base config). Hooks can be bypassed (`--no-verify`): CI runs the same gates.
 
-### 4. CI
+### CI
 
 `.github/workflows/quality.yml`, with the project on the `canary` → `main` flow:
 
@@ -117,7 +133,7 @@ report:
 
 Locally: `vp exec quality-gate report --setup "vp run astro sync"`.
 
-### 5. Scripts
+### Scripts
 
 Keep `package.json` scripts to this baseline. `vp check` and `vp test` are built-ins: do not wrap them in `check` or `test` scripts, and run Changesets with `vp exec changeset`.
 
@@ -129,9 +145,22 @@ Keep `package.json` scripts to this baseline. `vp check` and `vp test` are built
 
 `check-version` fails when the `package.json` version was edited by hand (neither published nor in `CHANGELOG.md`); run it in CI. `check-package` packs the project, then runs publint (strict) and attw on the tarball npm receives (`--profile esm-only` by default); `release` runs it before publishing. Both replace the `scripts/check-*.mjs` copies: drop them, and drop `publint` and `@arethetypeswrong/cli` from the dev dependencies.
 
-### 6. First report
+### First report
 
 Run `vp exec quality-gate report` locally (it writes `quality-report.md`), then fix what it finds in the project. Typical first findings: exports only used in their own file (Knip), dead code, a missing `@vitest/coverage-v8`.
+
+### README and CONTRIBUTING
+
+READMEs follow [Standard Readme](https://github.com/RichardLitt/standard-readme): its section order, its required sections (title, short description, table of contents from 100 lines, install, usage, contributing, license), in American English. Start from the template for the project type, and copy the shared contributing guide:
+
+| Project type      | Template                                        |
+| ----------------- | ----------------------------------------------- |
+| Published library | `templates/README.library.md`                   |
+| Command-line tool | `templates/README.cli.md`                       |
+| App or website    | `templates/README.app.md`                       |
+| Every project     | `templates/CONTRIBUTING.md` → `CONTRIBUTING.md` |
+
+They ship with the package: `node_modules/quality-gate/templates/`.
 
 ### Upgrade quality-gate
 
@@ -203,7 +232,9 @@ jobs:
 
 These settings apply to public and private repositories alike (rulesets on private repositories need GitHub Pro).
 
-## CLI
+## API
+
+### CLI
 
 ```text
 quality-gate report [file] [--setup "cmd"] run every gate, write a Markdown report (default quality-report.md); --setup runs first
@@ -218,6 +249,26 @@ quality-gate check-package [--profile p]   pack, then publint (strict) and attw 
 quality-gate release-notes [--from ref] [--to ref] [--repo owner/name] [--output file]
 ```
 
-## Develop quality-gate
+### `quality-gate/vite`
 
-`vp install` installs the hooks. quality-gate runs on its own base config, hooks and workflows (`ci.yml`, `release.yml`), and is released by the same `canary` → `main` flow: every change that reaches projects carries a changeset.
+| Export                          | What it is                                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `qualityGate`                   | The base Vite+ config: `lint` (type-aware, type check, `vite-plus/prefer-vite-plus-imports`), `fmt`, `test` (coverage), `staged`. Spread it into `defineConfig`. |
+| `defineQualityGate({ ignore })` | The base config with extra ignored folders for lint and fmt (generated or vendored only).                                                                        |
+
+### Reusable workflows
+
+| Workflow                  | Inputs                                                                                   | Secrets                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `reusable-report.yml`     | `node-version` (default `26`), `setup` (command run before the gates)                    | —                                            |
+| `reusable-changesets.yml` | `node-version`                                                                           | `RELEASE_DEPLOY_KEY` (Dependabot changesets) |
+| `reusable-release-pr.yml` | `node-version`                                                                           | —                                            |
+| `reusable-release.yml`    | `node-version`, `publish` (default `false`), `publish-script` (default `vp run release`) | `RELEASE_DEPLOY_KEY` (required)              |
+
+## Contributing
+
+Pull requests target `canary`. See [CONTRIBUTING.md](CONTRIBUTING.md). `vp install` installs the hooks. quality-gate runs on its own base config, hooks and workflows (`ci.yml`, `release.yml`), and is released by the same `canary` → `main` flow: every change that reaches projects carries a changeset.
+
+## License
+
+[MIT](LICENSE) © Maxime Sahroui
