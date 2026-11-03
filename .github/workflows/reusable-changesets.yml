@@ -18,6 +18,9 @@ jobs:
   changeset:
     if: github.event_name == 'pull_request' && github.base_ref == 'canary'
     runs-on: ubuntu-latest
+    env:
+      # Bot commits and pushes skip the project's git hooks (`vp install` installs them).
+      VP_GIT_HOOKS: "0"
     permissions:
       contents: read
     steps:

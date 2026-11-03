@@ -13,6 +13,9 @@ jobs:
   release-pr:
     if: github.event_name == 'push' && github.ref_name == 'canary'
     runs-on: ubuntu-latest
+    env:
+      # Bot commits and pushes skip the project's git hooks (`vp install` installs them).
+      VP_GIT_HOOKS: "0"
     permissions:
       contents: read
       pull-requests: write
@@ -35,6 +38,9 @@ jobs:
           existing=$(gh pr list --head canary --base main --state open --json number --jq '.[0].number // empty')
           if ! [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md -print -quit 2>/dev/null)" ]; then
             echo "No pending changeset: nothing to release."
+            if [ -n "$existing" ]; then
+              gh pr close "$existing" --comment "No pending changeset on canary anymore: nothing to release."
+            fi
             exit 0
           fi
           vp exec changeset status --output status.json >/dev/null
