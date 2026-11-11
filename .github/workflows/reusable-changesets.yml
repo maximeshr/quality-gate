@@ -9,6 +9,12 @@ on:
       node-version:
         type: string
         default: "26"
+      release-package:
+        description: >-
+          package.json of the package bumped by the changeset written for Dependabot pull requests.
+          Monorepos point it at the released app or package, e.g. apps/web/package.json.
+        type: string
+        default: package.json
     secrets:
       RELEASE_DEPLOY_KEY:
         description: Write deploy key, needed to add a changeset to Dependabot pull requests.
@@ -42,9 +48,10 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
           PR: ${{ github.event.pull_request.number }}
+          RELEASE_PACKAGE: ${{ inputs.release-package }}
         run: |
           if $QG check-changesets --base origin/canary --title "$TITLE" >/dev/null 2>&1; then exit 0; fi
-          name=$(jq -r .name package.json)
+          name=$(jq -r .name "$RELEASE_PACKAGE")
           printf -- '---\n"%s": patch\n---\n\nDependencies: %s.\n' "$name" "$TITLE" > ".changeset/dependabot-$PR.md"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

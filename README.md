@@ -217,6 +217,26 @@ jobs:
       RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
 ```
 
+### Monorepos
+
+In a pnpm workspace, Changesets versions the workspace packages, never the root. Point the release at the package that names it (an app or a library) with `release-package`, in `release.yml` and `quality.yml`:
+
+```yaml
+release:
+  uses: maximeshr/quality-gate/.github/workflows/reusable-release.yml@<tag>
+  with:
+    publish: false
+    release-package: apps/web/package.json
+changesets:
+  uses: maximeshr/quality-gate/.github/workflows/reusable-changesets.yml@<tag>
+  with:
+    release-package: apps/web/package.json
+```
+
+- The tag (`vX.Y.Z`) and the GitHub release take that package's version. Each release must bump it: when the pending changesets only bump other packages, the release stops before pushing, with an error.
+- The changeset written for a Dependabot pull request bumps that package.
+- `vp check` runs from the root over every workspace package; the root `vite.config.ts` points `test.include` and `test.coverage.include` at the packages (e.g. `{apps,packages}/*/src/**`).
+
 ### Repository settings
 
 | Setting              | Value                                                                                                                                                                                                                                                                                                                                                                                                   |
