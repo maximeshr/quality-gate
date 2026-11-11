@@ -17,6 +17,13 @@ on:
         description: Command that builds, checks and publishes (npm trusted publishing, OIDC).
         type: string
         default: vp run release
+      release-package:
+        description: >-
+          package.json whose version names the release (tag vX.Y.Z, GitHub release). Monorepos
+          point it at the released app or package, e.g. apps/web/package.json: Changesets never
+          versions a workspace root.
+        type: string
+        default: package.json
     secrets:
       RELEASE_DEPLOY_KEY:
         description: Write deploy key, bypass actor of the canary/main ruleset.
@@ -59,6 +66,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PUBLISH: ${{ inputs.publish }}
           PUBLISH_SCRIPT: ${{ inputs.publish-script }}
+          RELEASE_PACKAGE: ${{ inputs.release-package }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
           previous=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
@@ -67,7 +75,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           vp exec changeset version
-          version=$(jq -r .version package.json)
+          version=$(jq -r .version "$RELEASE_PACKAGE")
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::v$version is already tagged: the pending changesets do not bump $RELEASE_PACKAGE. Add a changeset for it (monorepos: the release-package input names the released package)."
+            exit 1
+          fi
           git add -A
           git commit -m "chore(release): v$version"
 
