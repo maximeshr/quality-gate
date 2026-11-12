@@ -49,7 +49,7 @@ jobs:
         id: pending
         run: |
           if [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md -print -quit 2>/dev/null)" ]; then echo "release=true" >> "$GITHUB_OUTPUT"; else echo "No pending changeset: nothing to release."; fi
-      - uses: voidzero-dev/setup-vp@v1.21.2
+      - uses: voidzero-dev/setup-vp@v1.22.0
         if: steps.pending.outputs.release == 'true'
         with:
           node-version: ${{ inputs.node-version }}
