@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -37,7 +38,8 @@ describe("report", () => {
   };
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "quality-gate-report-"));
+    // realpath: macOS tmpdir is a symlink, and Vitest writes coverage keys with the real path.
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "quality-gate-report-")));
     process.chdir(dir);
   });
 
@@ -118,5 +120,74 @@ describe("report", () => {
     const { markdown } = report({ tools, exec: fakeExec().exec, onPath: () => false });
 
     expect(markdown).toContain("| 81.5% | 80% | 75% | 60.25% |");
+  });
+  const writeSummary = (file: string, lines: number, files: Record<string, number> = {}) => {
+    const entry = (pct: number) => {
+      const metric = { total: 10, covered: 0, skipped: 0, pct };
+      return { lines: metric, statements: metric, functions: metric, branches: metric };
+    };
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(
+      file,
+      JSON.stringify({
+        total: entry(lines),
+        ...Object.fromEntries(Object.entries(files).map(([p, pct]) => [join(dir, p), entry(pct)])),
+      }),
+    );
+  };
+
+  test("skips the coverage gate without a base branch summary", () => {
+    project({ name: "app" });
+    const { markdown } = report({ tools, exec: fakeExec().exec, onPath: () => false });
+    expect(markdown).toContain("| ⏭️ | Coverage (no drop) | no base branch coverage | - |");
+  });
+
+  test("fails when line coverage drops against the base branch", () => {
+    project({ name: "app" });
+    writeSummary(join(dir, "coverage", "coverage-summary.json"), 70);
+    writeSummary(join(dir, "base", "coverage-summary.json"), 80);
+    const { markdown, failed } = report({
+      tools,
+      baseline: join(dir, "base", "coverage-summary.json"),
+      exec: fakeExec().exec,
+      onPath: () => false,
+    });
+
+    expect(failed).toBe(true);
+    expect(markdown).toContain("| ❌ | Coverage (no drop) | Line coverage dropped from 80% to 70%");
+    expect(markdown).toContain("<summary>❌ Coverage (no drop)</summary>");
+    expect(markdown).toContain("| 70% (−10) |");
+  });
+
+  test("lists the coverage of the files changed since the base ref", () => {
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    project({ name: "app" });
+    git("init", "-q", "-b", "canary");
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "src", "old.js"), "export const a = 1;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "chore: init");
+    git("switch", "-q", "-c", "feature");
+    writeFileSync(join(dir, "src", "new.js"), "export const b = 2;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "feat: add new.js");
+    writeSummary(join(dir, "coverage", "coverage-summary.json"), 90, {
+      "src/old.js": 100,
+      "src/new.js": 75,
+    });
+
+    const { markdown, failed } = report({
+      tools,
+      base: "canary",
+      exec: fakeExec().exec,
+      onPath: () => false,
+    });
+
+    expect(failed).toBe(false);
+    expect(markdown).toContain("#### Changed files");
+    expect(markdown).toContain("| `src/new.js` | 75% | 75% |");
+    expect(markdown).not.toContain("`src/old.js`");
   });
 });

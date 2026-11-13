@@ -29,6 +29,7 @@ The base configuration only changes when a rule is wrong for every project. A pr
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with `vite-plus/prefer-vite-plus-imports`, TypeScript) | `quality-gate/vite`                                   |
 | Tests + coverage               | `vp test --coverage`                                                                                        | `quality-gate/vite`                                   |
+| Coverage (no drop)             | line coverage may not drop by more than 0.5 point against the base branch (pull requests)                   | —                                                     |
 | Dead code, unused dependencies | Knip                                                                                                        | zero-config (`knip.json` only for structural entries) |
 | Duplication                    | jscpd on `src/` (Markdown excluded): fails above 5 % duplicated, not on each clone                          | `configs/jscpd.json`                                  |
 | Secrets                        | secretlint, recommended preset                                                                              | `configs/secretlintrc.json`                           |
@@ -36,6 +37,8 @@ The base configuration only changes when a rule is wrong for every project. A pr
 | Build                          | `vp run build`, when the project has a `build` script                                                       | the project                                           |
 
 Commit messages follow Conventional Commits (`configs/commitlint.config.js`). The report runs every gate even when one fails, and lists each failure with its output.
+
+On a pull request, the coverage section also shows the change of each total against the base branch, and the coverage of the files the pull request changes. The base branch's coverage comes from its last push run (saved in the Actions cache): until the base branch has run once with this version, the coverage gate is skipped.
 
 ## Install
 
@@ -135,6 +138,12 @@ report:
 ```
 
 Locally: `vp exec quality-gate report --setup "vp run astro sync"`.
+
+The report job checks out the full history (to list the changed files) and keeps the coverage of each push in the Actions cache for the pull requests into that branch: nothing to configure in the project. Locally, compare with a base branch the same way:
+
+```sh
+vp exec quality-gate report --base origin/canary --baseline path/to/canary/coverage-summary.json
+```
 
 ### Scripts
 
@@ -260,7 +269,11 @@ These settings apply to public and private repositories alike (rulesets on priva
 ### CLI
 
 ```text
-quality-gate report [file] [--setup "cmd"] run every gate, write a Markdown report (default quality-report.md); --setup runs first
+quality-gate report [file] [--setup "cmd"] [--base ref] [--baseline coverage-summary.json]
+                                           run every gate, write a Markdown report (default quality-report.md);
+                                           --setup runs first; --base lists the coverage of the files changed
+                                           since ref; --baseline shows the coverage change and fails when line
+                                           coverage drops by more than 0.5 point
 quality-gate secrets [files...]            secretlint with the base config
 quality-gate deadcode                      knip
 quality-gate duplication                   jscpd with the base config
