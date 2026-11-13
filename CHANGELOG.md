@@ -1,5 +1,15 @@
 # quality-gate
 
+## 0.7.0
+
+### Minor Changes
+
+- 7b6dcaf: The quality report compares coverage with the base branch: each total shows its change, a new table lists the coverage of the files the pull request changes, and a new gate fails when line coverage drops by more than 0.5 point. The report workflow keeps each branch's coverage in the Actions cache, so projects have nothing to configure; the gate is skipped until the base branch has run once. Locally: `quality-gate report --base <ref> --baseline <coverage-summary.json>`.
+
+### Patch Changes
+
+- 9b4d744: The CLI now rejects an unknown option or an extra argument with an error and the usage, instead of ignoring it: a typo such as `--profle` no longer runs the command with its defaults.
+
 ## 0.6.0
 
 ### Minor Changes
