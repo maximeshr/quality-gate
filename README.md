@@ -1,6 +1,7 @@
 # quality-gate
 
 [![CI](https://github.com/maximeshr/quality-gate/actions/workflows/ci.yml/badge.svg?branch=canary)](https://github.com/maximeshr/quality-gate/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/maximeshr/quality-gate)](https://github.com/maximeshr/quality-gate/releases/latest)
 
 Shared quality gate for OKQ projects: one Vite+ (`vp`) base configuration, one CLI, and reusable GitHub Actions workflows that post a quality report on every pull request and run the `canary` → `main` release flow.
 
@@ -28,6 +29,7 @@ The base configuration only changes when a rule is wrong for every project. A pr
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with `vite-plus/prefer-vite-plus-imports`, TypeScript) | `quality-gate/vite`                                   |
 | Tests + coverage               | `vp test --coverage`                                                                                        | `quality-gate/vite`                                   |
+| Coverage (no drop)             | line coverage may not drop by more than 0.5 point against the base branch (pull requests)                   | —                                                     |
 | Dead code, unused dependencies | Knip                                                                                                        | zero-config (`knip.json` only for structural entries) |
 | Duplication                    | jscpd on `src/` (Markdown excluded): fails above 5 % duplicated, not on each clone                          | `configs/jscpd.json`                                  |
 | Secrets                        | secretlint, recommended preset                                                                              | `configs/secretlintrc.json`                           |
@@ -36,10 +38,14 @@ The base configuration only changes when a rule is wrong for every project. A pr
 
 Commit messages follow Conventional Commits (`configs/commitlint.config.js`). The report runs every gate even when one fails, and lists each failure with its output.
 
+On a pull request, the coverage section also shows the change of each total against the base branch, and the coverage of the files the pull request changes. The base branch's coverage comes from its last push run (saved in the Actions cache): until the base branch has run once with this version, the coverage gate is skipped.
+
 ## Install
 
+`vX.Y.Z` stands for the [latest release](https://github.com/maximeshr/quality-gate/releases/latest) in every snippet of this README: use the same tag everywhere.
+
 ```sh
-vp add -D "quality-gate@github:maximeshr/quality-gate#v0.4.0" @vitest/coverage-v8@<vitest version>
+vp add -D "quality-gate@github:maximeshr/quality-gate#vX.Y.Z" @vitest/coverage-v8@<vitest version>
 ```
 
 - `@vitest/coverage-v8` must be the Vitest version bundled with vite-plus (`vp toolchain vitest`): the base config collects coverage, and Vitest loads the provider from the project.
@@ -108,12 +114,12 @@ permissions:
   contents: read
 jobs:
   report:
-    uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@v0.4.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@vX.Y.Z
     permissions:
       contents: read
       pull-requests: write
   changesets:
-    uses: maximeshr/quality-gate/.github/workflows/reusable-changesets.yml@v0.4.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-changesets.yml@vX.Y.Z
     permissions:
       contents: read
     secrets:
@@ -126,12 +132,18 @@ When `vp check` needs generated files that a fresh checkout does not have (Astro
 
 ```yaml
 report:
-  uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@v0.4.0
+  uses: maximeshr/quality-gate/.github/workflows/reusable-report.yml@vX.Y.Z
   with:
     setup: vp run astro sync
 ```
 
 Locally: `vp exec quality-gate report --setup "vp run astro sync"`.
+
+The report job checks out the full history (to list the changed files) and keeps the coverage of each push in the Actions cache for the pull requests into that branch: nothing to configure in the project. Locally, compare with a base branch the same way:
+
+```sh
+vp exec quality-gate report --base origin/canary --baseline path/to/canary/coverage-summary.json
+```
 
 ### Scripts
 
@@ -199,13 +211,13 @@ permissions:
 jobs:
   release-pr:
     if: github.ref_name == 'canary'
-    uses: maximeshr/quality-gate/.github/workflows/reusable-release-pr.yml@v0.4.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-release-pr.yml@vX.Y.Z
     permissions:
       contents: read
       pull-requests: write
   release:
     if: github.ref_name == 'main'
-    uses: maximeshr/quality-gate/.github/workflows/reusable-release.yml@v0.4.0
+    uses: maximeshr/quality-gate/.github/workflows/reusable-release.yml@vX.Y.Z
     permissions:
       contents: write
       pull-requests: write
@@ -257,7 +269,11 @@ These settings apply to public and private repositories alike (rulesets on priva
 ### CLI
 
 ```text
-quality-gate report [file] [--setup "cmd"] run every gate, write a Markdown report (default quality-report.md); --setup runs first
+quality-gate report [file] [--setup "cmd"] [--base ref] [--baseline coverage-summary.json]
+                                           run every gate, write a Markdown report (default quality-report.md);
+                                           --setup runs first; --base lists the coverage of the files changed
+                                           since ref; --baseline shows the coverage change and fails when line
+                                           coverage drops by more than 0.5 point
 quality-gate secrets [files...]            secretlint with the base config
 quality-gate deadcode                      knip
 quality-gate duplication                   jscpd with the base config

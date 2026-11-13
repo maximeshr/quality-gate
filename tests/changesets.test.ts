@@ -104,3 +104,54 @@ describe("isInternal", () => {
     expect(isInternal(title)).toBe(expected);
   });
 });
+
+describe("releaseNotes pull requests", () => {
+  let repo: string;
+  const previous = process.cwd();
+
+  beforeEach(() => {
+    repo = mkdtempSync(join(tmpdir(), "quality-gate-notes-"));
+    git(repo, "init", "-q", "-b", "canary");
+    git(repo, "config", "user.email", "test@example.com");
+    git(repo, "config", "user.name", "Test");
+    git(repo, "commit", "-q", "--allow-empty", "-m", "chore: init");
+    git(repo, "commit", "-q", "--allow-empty", "-m", "feat: one");
+    git(repo, "commit", "-q", "--allow-empty", "-m", "fix: two");
+    process.chdir(repo);
+  });
+
+  afterEach(() => {
+    process.chdir(previous);
+  });
+
+  test("lists each pull request once, sorted, without the release pull requests", () => {
+    const asked: string[] = [];
+    const pulls = (repository: string, sha: string) => {
+      asked.push(repository);
+      // Both commits belong to #12 and #4; #30 is the release pull request into main.
+      return sha.length === 40
+        ? "12\tfeat: one\talice\tcanary\n4\tfix: two\tbob\tcanary\n30\tRelease pkg@1.0.0\tbot\tmain\n"
+        : undefined;
+    };
+    const notes = releaseNotes({ from: "HEAD~2", to: "HEAD", repository: "o/r", pulls });
+
+    expect(asked).toEqual(["o/r", "o/r"]);
+    expect(notes).toContain("### Pull requests\n\n- #4 fix: two (bob)\n- #12 feat: one (alice)\n");
+    expect(notes).not.toContain("#30");
+    expect(notes).toContain("_No pending changeset._");
+  });
+
+  test("skips a commit whose lookup fails, and the section without a repository", () => {
+    const failing = () => undefined;
+    expect(
+      releaseNotes({ from: "HEAD~2", to: "HEAD", repository: "o/r", pulls: failing }),
+    ).not.toContain("### Pull requests");
+    expect(releaseNotes({ from: "HEAD~2", to: "HEAD", pulls: failing })).not.toContain(
+      "### Pull requests",
+    );
+  });
+
+  test("says when the range has no commit", () => {
+    expect(releaseNotes({ from: "HEAD", to: "HEAD" })).toContain("### Commits\n\n_No commit._");
+  });
+});

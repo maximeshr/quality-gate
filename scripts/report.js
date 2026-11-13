@@ -1,7 +1,9 @@
 // Runs every gate and renders the Markdown report posted on pull requests.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { stripVTControlCharacters } from "node:util";
+
+import { coverageCheck, coverageSection, readSummary } from "./coverage.js";
 
 const MARKER = "<!-- quality-gate-report -->";
 
@@ -27,24 +29,27 @@ function hasBuildScript() {
   return Boolean(manifest.scripts?.build);
 }
 
-function coverageTable() {
-  const file = "coverage/coverage-summary.json";
-  if (!existsSync(file)) return "_No coverage summary._";
-  const { total } = JSON.parse(readFileSync(file, "utf8"));
-  const cell = (metric) => `${total[metric].pct}%`;
-  return [
-    "| Lines | Statements | Functions | Branches |",
-    "|---|---|---|---|",
-    `| ${cell("lines")} | ${cell("statements")} | ${cell("functions")} | ${cell("branches")} |`,
-  ].join("\n");
-}
-
 const tail = (text, lines = 80) =>
   text
     .split("\n")
     .filter((line) => line.trim() !== "")
     .slice(-lines)
     .join("\n");
+
+/**
+ * Files the branch changes since it left `base` (deleted files excluded), relative to the
+ * repository root. Undefined when `base` cannot be compared.
+ */
+function changedFiles(base) {
+  const result = spawnSync("git", ["diff", "--name-only", "--diff-filter=d", `${base}...HEAD`], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    console.error(`quality-gate report: cannot compare with ${base}: ${result.stderr.trim()}`);
+    return undefined;
+  }
+  return result.stdout.split("\n").filter(Boolean);
+}
 
 /** Short command for the report: no absolute paths. */
 const display = (command, args) =>
@@ -53,18 +58,49 @@ const display = (command, args) =>
     .join(" ");
 
 /**
- * @param {{ tools: Record<string, (...args: any[]) => [string, string[]]>, setup?: string }} options
+ * @param {{
+ *   tools: Record<string, (...args: any[]) => [string, string[]]>,
+ *   setup?: string,
+ *   exec?: (command: string, args: string[]) => { ok: boolean, output: string, seconds: number },
+ *   onPath?: (command: string) => boolean,
+ *   base?: string,
+ *   baseline?: string,
+ * }} options
  *   `setup` runs before the gates (e.g. `vp run astro sync` to generate the types `vp check` needs).
+ *   `base`: the git ref the branch is compared with (lists the coverage of the changed files).
+ *   `baseline`: the base branch's `coverage-summary.json` (coverage change, and the gate that
+ *   fails when line coverage drops).
+ *   `exec` and `onPath` default to running the real commands.
  */
-export function report({ tools, setup }) {
+export function report({
+  tools,
+  setup,
+  base,
+  baseline,
+  exec: run = exec,
+  onPath: installed = onPath,
+}) {
+  const before = readSummary(baseline);
+  /** Read after the tests ran. */
+  const current = () => readSummary("coverage/coverage-summary.json");
   const gates = [
     ...(setup ? [{ label: "Setup", command: ["sh", ["-c", setup]] }] : []),
     { label: "Format + lint + types", command: ["vp", ["check", "--deny-warnings"]] },
     { label: "Tests + coverage", command: ["vp", ["test", "--coverage"]] },
+    before
+      ? {
+          label: "Coverage (no drop)",
+          check: () =>
+            coverageCheck({ current: current(), baseline: before }) ?? {
+              ok: false,
+              output: "The tests wrote no coverage summary (coverage/coverage-summary.json).",
+            },
+        }
+      : { label: "Coverage (no drop)", skipped: "no base branch coverage" },
     { label: "Dead code / unused deps", command: tools.deadcode() },
     { label: "Duplication", command: tools.duplication() },
     { label: "Secrets", command: tools.secrets() },
-    onPath("semgrep")
+    installed("semgrep")
       ? {
           label: "SAST (Semgrep)",
           command: [
@@ -97,12 +133,17 @@ export function report({ tools, setup }) {
       rows.push(`| ⏭️ | ${gate.label} | ${gate.skipped} | - |`);
       continue;
     }
-    const [command, args] = gate.command;
-    const result = exec(command, args);
-    const shown = display(command, args);
-    rows.push(
-      `| ${result.ok ? "✅" : "❌"} | ${gate.label} | \`${shown}\` | ${result.seconds.toFixed(1)} s |`,
-    );
+    let result;
+    if (gate.check) {
+      result = gate.check();
+      rows.push(`| ${result.ok ? "✅" : "❌"} | ${gate.label} | ${result.output} | - |`);
+    } else {
+      const [command, args] = gate.command;
+      result = run(command, args);
+      rows.push(
+        `| ${result.ok ? "✅" : "❌"} | ${gate.label} | \`${display(command, args)}\` | ${result.seconds.toFixed(1)} s |`,
+      );
+    }
     if (!result.ok) {
       failed = true;
       details.push(
@@ -127,7 +168,7 @@ export function report({ tools, setup }) {
     "",
     "### Coverage",
     "",
-    coverageTable(),
+    coverageSection({ current: current(), baseline: before, changed: base && changedFiles(base) }),
     "",
     ...details,
     "",
