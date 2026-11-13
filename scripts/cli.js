@@ -30,7 +30,7 @@ export const USAGE = `Usage: quality-gate <command>
   release-notes [--from ref] [--to ref] [--repo owner/name] [--output file]`;
 
 /** Absolute path of a dependency's bin script. */
-function toolBin(pkg, name = pkg.split("/").pop()) {
+export function toolBin(pkg, name = pkg.split("/").pop()) {
   const manifestPath = findPackageJSON(pkg, import.meta.url);
   if (!manifestPath) throw new Error(`quality-gate: cannot find the ${pkg} package`);
   const { bin } = JSON.parse(readFileSync(manifestPath, "utf8"));
