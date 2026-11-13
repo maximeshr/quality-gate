@@ -53,10 +53,16 @@ const display = (command, args) =>
     .join(" ");
 
 /**
- * @param {{ tools: Record<string, (...args: any[]) => [string, string[]]>, setup?: string }} options
+ * @param {{
+ *   tools: Record<string, (...args: any[]) => [string, string[]]>,
+ *   setup?: string,
+ *   exec?: (command: string, args: string[]) => { ok: boolean, output: string, seconds: number },
+ *   onPath?: (command: string) => boolean,
+ * }} options
  *   `setup` runs before the gates (e.g. `vp run astro sync` to generate the types `vp check` needs).
+ *   `exec` and `onPath` default to running the real commands.
  */
-export function report({ tools, setup }) {
+export function report({ tools, setup, exec: run = exec, onPath: installed = onPath }) {
   const gates = [
     ...(setup ? [{ label: "Setup", command: ["sh", ["-c", setup]] }] : []),
     { label: "Format + lint + types", command: ["vp", ["check", "--deny-warnings"]] },
@@ -64,7 +70,7 @@ export function report({ tools, setup }) {
     { label: "Dead code / unused deps", command: tools.deadcode() },
     { label: "Duplication", command: tools.duplication() },
     { label: "Secrets", command: tools.secrets() },
-    onPath("semgrep")
+    installed("semgrep")
       ? {
           label: "SAST (Semgrep)",
           command: [
@@ -98,7 +104,7 @@ export function report({ tools, setup }) {
       continue;
     }
     const [command, args] = gate.command;
-    const result = exec(command, args);
+    const result = run(command, args);
     const shown = display(command, args);
     rows.push(
       `| ${result.ok ? "✅" : "❌"} | ${gate.label} | \`${shown}\` | ${result.seconds.toFixed(1)} s |`,

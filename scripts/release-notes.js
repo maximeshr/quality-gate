@@ -15,23 +15,32 @@ function git(args) {
   return result.status === 0 ? result.stdout.trim() : "";
 }
 
-/** Pull requests behind the commits of the range, through the GitHub API (needs `gh`). */
-function pullRequests(shas, repository) {
+/**
+ * Pull requests of a commit, through the GitHub API (needs `gh`): one
+ * `number<TAB>title<TAB>author<TAB>base` line each, or undefined when the call fails.
+ */
+function githubPulls(repository, sha) {
+  const result = spawnSync(
+    "gh",
+    [
+      "api",
+      `repos/${repository}/commits/${sha}/pulls`,
+      "--jq",
+      ".[] | [.number, .title, .user.login, .base.ref] | @tsv",
+    ],
+    { encoding: "utf8" },
+  );
+  return result.status === 0 ? result.stdout : undefined;
+}
+
+/** Pull requests behind the commits of the range, release pull requests (into main) excluded. */
+function pullRequests(shas, repository, pulls) {
   if (!repository) return [];
   const seen = new Map();
   for (const sha of shas) {
-    const result = spawnSync(
-      "gh",
-      [
-        "api",
-        `repos/${repository}/commits/${sha}/pulls`,
-        "--jq",
-        ".[] | [.number, .title, .user.login, .base.ref] | @tsv",
-      ],
-      { encoding: "utf8" },
-    );
-    if (result.status !== 0) continue;
-    for (const line of result.stdout.split("\n").filter(Boolean)) {
+    const output = pulls(repository, sha);
+    if (output === undefined) continue;
+    for (const line of output.split("\n").filter(Boolean)) {
       const [number, title, author, baseRef] = line.split("\t");
       if (baseRef === "main" || seen.has(number)) continue;
       seen.set(number, { number, title, author });
@@ -40,7 +49,11 @@ function pullRequests(shas, repository) {
   return [...seen.values()].sort((a, b) => Number(a.number) - Number(b.number));
 }
 
-export function releaseNotes({ from, to, repository }) {
+/**
+ * @param {{ from: string, to: string, repository?: string, pulls?: typeof githubPulls }} options
+ *   `pulls` defaults to the GitHub API through `gh`.
+ */
+export function releaseNotes({ from, to, repository, pulls = githubPulls }) {
   const changesets = pendingChangesets();
   const lines = ["## Release notes", ""];
 
@@ -64,6 +77,7 @@ export function releaseNotes({ from, to, repository }) {
   const prs = pullRequests(
     commits.map(([sha]) => sha),
     repository,
+    pulls,
   );
   if (prs.length > 0) {
     lines.push("### Pull requests", "");
