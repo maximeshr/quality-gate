@@ -17,8 +17,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 export const USAGE = `Usage: quality-gate <command>
 
-  report [file] [--setup "cmd"] run every gate, write a Markdown report (default quality-report.md);
-                                --setup runs first, e.g. to generate framework types
+  report [file] [--setup "cmd"] [--base ref] [--baseline coverage-summary.json]
+                                run every gate, write a Markdown report (default quality-report.md);
+                                --setup runs first, e.g. to generate framework types;
+                                --base lists the coverage of the files changed since that ref;
+                                --baseline compares the coverage with the base branch's summary
+                                and fails when line coverage drops by more than 0.5 point
   secrets [files...]            secretlint with the base config
   deadcode                      knip
   duplication                   jscpd with the base config
@@ -71,7 +75,7 @@ const string = { type: "string" };
  * @type {Record<string, { options?: Record<string, { type: "string" }>, positionals?: number }>}
  */
 const COMMANDS = {
-  report: { options: { setup: string }, positionals: 1 },
+  report: { options: { setup: string, base: string, baseline: string }, positionals: 1 },
   deadcode: {},
   duplication: {},
   "check-changesets": { options: { base: string, title: string } },
@@ -130,7 +134,8 @@ export async function main(argv) {
   switch (command) {
     case "report": {
       const output = positionals[0] ?? "quality-report.md";
-      const { markdown, failed } = report({ tools, setup: values.setup });
+      const { setup, base, baseline } = values;
+      const { markdown, failed } = report({ tools, setup, base, baseline });
       writeFileSync(output, markdown);
       process.stdout.write(markdown);
       return failed ? 1 : 0;
