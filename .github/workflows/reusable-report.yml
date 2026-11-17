@@ -22,6 +22,9 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          # Full history: the report lists the coverage of the files changed since the base branch.
+          fetch-depth: 0
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
           node-version: ${{ inputs.node-version }}
@@ -32,13 +35,42 @@ jobs:
       - name: Resolve the quality-gate CLI
         run: |
           if [ "$(jq -r .name package.json)" = "quality-gate" ]; then echo "QG=node bin/quality-gate.js" >> "$GITHUB_ENV"; else echo "QG=vp exec quality-gate" >> "$GITHUB_ENV"; fi
+      # The base branch's coverage, saved by its last push run: the report shows the change and
+      # fails when line coverage drops. Outside the workspace, so no gate checks the file.
+      - name: Restore the base branch coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ runner.temp }}/quality-gate-baseline
+          key: quality-gate-coverage-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+          restore-keys: quality-gate-coverage-${{ github.base_ref }}-
       - name: Run the quality gates
         id: gates
         continue-on-error: true
         env:
           SETUP: ${{ inputs.setup }}
+          BASE_REF: ${{ github.base_ref }}
+          BASELINE: ${{ runner.temp }}/quality-gate-baseline/coverage-summary.json
         run: |
-          if [ -n "$SETUP" ]; then $QG report quality-report.md --setup "$SETUP"; else $QG report quality-report.md; fi
+          set -- quality-report.md
+          if [ -n "$SETUP" ]; then set -- "$@" --setup "$SETUP"; fi
+          if [ -n "$BASE_REF" ]; then set -- "$@" --base "origin/$BASE_REF"; fi
+          if [ -f "$BASELINE" ]; then set -- "$@" --baseline "$BASELINE"; fi
+          $QG report "$@"
+      - name: Keep the coverage for the pull requests into this branch
+        id: coverage
+        if: github.event_name == 'push' && hashFiles('coverage/coverage-summary.json') != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/quality-gate-baseline"
+          cp coverage/coverage-summary.json "$RUNNER_TEMP/quality-gate-baseline/"
+      - name: Save the coverage of this branch
+        if: steps.coverage.outcome == 'success'
+        # A rerun on the same commit finds the key taken: nothing to save.
+        continue-on-error: true
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ runner.temp }}/quality-gate-baseline
+          key: quality-gate-coverage-${{ github.ref_name }}-${{ github.sha }}
       - name: Job summary
         if: always()
         run: cat quality-report.md >> "$GITHUB_STEP_SUMMARY"

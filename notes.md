@@ -2,21 +2,22 @@
 
 ### Minor changes
 
-- Monorepos can now use the shared release flow: the new `release-package` input of `reusable-release.yml` and `reusable-changesets.yml` names the package whose version tags the release and that Dependabot changesets bump, e.g. `apps/web/package.json`. A release whose changesets do not bump that package now stops with an error instead of reusing an existing tag.
+- The quality report compares coverage with the base branch: each total shows its change, a new table lists the coverage of the files the pull request changes, and a new gate fails when line coverage drops by more than 0.5 point. The report workflow keeps each branch's coverage in the Actions cache, so projects have nothing to configure; the gate is skipped until the base branch has run once. Locally: `quality-gate report --base <ref> --baseline <coverage-summary.json>`.
 
 ### Patch changes
 
-- Dependencies: chore(deps): bump the minor-and-patch group with 4 updates.
+- The CLI now rejects an unknown option or an extra argument with an error and the usage, instead of ignoring it: a typo such as `--profle` no longer runs the command with its defaults.
 
 ### Pull requests
 
-- #19 ci: bump voidzero-dev/setup-vp from 1.21.2 to 1.22.0 in the actions group (dependabot[bot])
-- #20 chore(deps): bump the minor-and-patch group with 4 updates (dependabot[bot])
-- #21 feat: support monorepos in the release workflows (maximeshr)
+- #24 docs: stop hard-coding the release tag in the README (maximeshr)
+- #25 refactor: parse the CLI options with node:util parseArgs (maximeshr)
+- #26 test: cover the report, the release notes and the package check (maximeshr)
+- #27 feat: compare the coverage with the base branch in the report (maximeshr)
 
 ### Commits
 
-- `98fd8cb` feat: support monorepos in the release workflows (Maxime Sahroui)
-- `70f9d6c` chore: add changeset for #20 (github-actions[bot])
-- `a837ea8` chore(deps): bump the minor-and-patch group with 4 updates (dependabot[bot])
-- `1d62c53` ci: bump voidzero-dev/setup-vp (dependabot[bot])
+- `7b6dcaf` feat: compare the coverage with the base branch in the report (Maxime Sahroui)
+- `71a8190` test: cover the report, the release notes and the package check (Maxime Sahroui)
+- `9b4d744` refactor: parse the CLI options with node:util parseArgs (Maxime Sahroui)
+- `6eab9fd` docs: stop hard-coding the release tag in the README (Maxime Sahroui)
