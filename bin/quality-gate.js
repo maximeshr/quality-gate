@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 // quality-gate CLI. Tools are dependencies of quality-gate, resolved from here,
-// so projects only add `quality-gate` (pnpm does not link transitive bins).
+// so projects only add `quality-gate` (pnpm does not link transitive bins)
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { findPackageJSON } from "node:module";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 import { checkChangesets, isInternal } from "../scripts/changesets.js";
 import { checkPackage } from "../scripts/check-package.js";
@@ -13,22 +12,70 @@ import { checkVersion } from "../scripts/check-version.js";
 import { releaseNotes } from "../scripts/release-notes.js";
 import { report } from "../scripts/report.js";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.join(import.meta.dirname, "..");
 
-/** Absolute path of a dependency's bin script. */
-function toolBin(pkg, name = pkg.split("/").pop()) {
+/**
+ * @param {unknown} value Parsed JSON
+ * @returns {value is Record<string, unknown>} true for an object or an array
+ */
+const isObject = (value) => value instanceof Object;
+
+/**
+ * @param {unknown} value Parsed JSON
+ * @returns {value is string} true for a string
+ */
+const isString = (value) => String(value) === value;
+
+/**
+ * Absolute path of a dependency's bin script
+ *
+ * @param {string} pkg Package name
+ * @param {string} [name] Bin name, for a package with several bins
+ * @returns {string} The path of the bin script
+ */
+const toolBin = (pkg, name = pkg.split("/").pop()) => {
   const manifestPath = findPackageJSON(pkg, import.meta.url);
-  if (!manifestPath) throw new Error(`quality-gate: cannot find the ${pkg} package`);
-  const { bin } = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const relative = typeof bin === "string" ? bin : bin[name];
-  return join(dirname(manifestPath), relative);
-}
 
-const config = (file) => join(root, "configs", file);
+  if (manifestPath === undefined || manifestPath === "") {
+    throw new Error(`quality-gate: cannot find the ${pkg} package`);
+  }
+
+  /** @type {unknown} */
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  const bin = isObject(manifest) ? manifest.bin : undefined;
+  const relative = isObject(bin) && name !== undefined ? bin[name] : bin;
+
+  if (!isString(relative)) {
+    throw new Error(`quality-gate: the ${pkg} package has no ${name} bin`);
+  }
+
+  return path.join(path.dirname(manifestPath), relative);
+};
+
+/**
+ * @param {string} file Config file name
+ * @returns {string} Its path in quality-gate
+ */
+const config = (file) => path.join(root, "configs", file);
+
+/**
+ * @param {string} pkg Package name
+ * @param {string[]} args Arguments
+ * @param {string} [name] Bin name, for a package with several bins
+ * @returns {[string, string[]]} Command and arguments running the bin with this Node
+ */
 const node = (pkg, args, name) => [process.execPath, [toolBin(pkg, name), ...args]];
 
-/** Commands shared by the report and the individual subcommands. */
+/** Commands shared by the report and the individual subcommands */
 const tools = {
+  /** @param {string[]} args Arguments for commitlint */
+  commitlint: (args) =>
+    node("@commitlint/cli", ["--config", config("commitlint.config.js"), ...args], "commitlint"),
+  deadcode: () => node("knip", []),
+  duplication: () =>
+    // No --exit-code: jscpd then fails only above the config threshold (5 %), not on every clone
+    node("jscpd", ["--config", config("jscpd.json"), "--reporters", "console"]),
+  /** @param {string[]} [files] Files to scan */
   secrets: (files = ["**/*"]) =>
     node("secretlint", [
       "--secretlintrc",
@@ -36,45 +83,73 @@ const tools = {
       "--no-maskSecrets",
       ...files,
     ]),
-  deadcode: () => node("knip", []),
-  duplication: () =>
-    // No --exit-code: jscpd then fails only above the config threshold (5 %), not on every clone.
-    node("jscpd", ["--config", config("jscpd.json"), "--reporters", "console"]),
-  commitlint: (args) =>
-    node("@commitlint/cli", ["--config", config("commitlint.config.js"), ...args], "commitlint"),
 };
 
-function run([command, args]) {
+/**
+ * @param {[string, string[]]} tool Command and arguments
+ * @returns {number} The exit code
+ */
+const run = ([command, args]) => {
   const { status } = spawnSync(command, args, { stdio: "inherit" });
-  return status ?? 1;
-}
 
-const [subcommand, ...args] = process.argv.slice(2);
+  return status ?? 1;
+};
+
+const [subcommand = "", ...args] = process.argv.slice(2);
+
+/**
+ * @param {string} name Option name, without `--`
+ * @param {string} [fallback] Value when the option is absent
+ * @returns {string | undefined} The value after the option
+ */
 const option = (name, fallback) => {
   const index = args.indexOf(`--${name}`);
+
   return index === -1 ? fallback : args[index + 1];
 };
 
 switch (subcommand) {
   case "report": {
-    const output = args[0] && !args[0].startsWith("--") ? args[0] : "quality-report.md";
-    const { markdown, failed } = report({ tools, setup: option("setup") });
+    const [first] = args;
+
+    const output =
+      first !== undefined && first !== "" && !first.startsWith("--") ? first : "quality-report.md";
+
+    const { markdown, failed } = report({ setup: option("setup"), tools });
     writeFileSync(output, markdown);
     process.stdout.write(markdown);
     process.exit(failed ? 1 : 0);
+    break;
   }
-  case "secrets":
+
+  case "secrets": {
     process.exit(run(tools.secrets(args.length > 0 ? args : undefined)));
-  case "deadcode":
+    break;
+  }
+
+  case "deadcode": {
     process.exit(run(tools.deadcode()));
-  case "duplication":
+    break;
+  }
+
+  case "duplication": {
     process.exit(run(tools.duplication()));
-  case "commitlint":
+    break;
+  }
+
+  case "commitlint": {
     process.exit(run(tools.commitlint(args)));
+    break;
+  }
+
   case "check-changesets": {
     const title = option("title");
     const errors = checkChangesets({ base: option("base", "origin/canary"), title });
-    for (const error of errors) console.error(`✖ ${error}`);
+
+    for (const error of errors) {
+      console.error(`✖ ${error}`);
+    }
+
     if (errors.length === 0) {
       console.log(
         isInternal(title)
@@ -82,32 +157,52 @@ switch (subcommand) {
           : "✔ changesets are present and useful",
       );
     }
+
     process.exit(errors.length === 0 ? 0 : 1);
+    break;
   }
+
   case "check-version": {
     const error = await checkVersion();
-    if (error) console.error(error);
-    process.exit(error ? 1 : 0);
+
+    if (error !== undefined) {
+      console.error(error);
+    }
+
+    process.exit(error === undefined ? 0 : 1);
+    break;
   }
+
   case "check-package": {
     const ok = await checkPackage({
       attwBin: toolBin("@arethetypeswrong/cli", "attw"),
       profile: option("profile", "esm-only"),
     });
+
     process.exit(ok ? 0 : 1);
+    break;
   }
+
   case "release-notes": {
     const markdown = releaseNotes({
       from: option("from", "origin/main"),
-      to: option("to", "HEAD"),
       repository: option("repo", process.env.GITHUB_REPOSITORY),
+      to: option("to", "HEAD"),
     });
+
     const output = option("output");
-    if (output) writeFileSync(output, markdown);
-    else process.stdout.write(markdown);
+
+    if (output !== undefined && output !== "") {
+      writeFileSync(output, markdown);
+    } else {
+      process.stdout.write(markdown);
+    }
+
     process.exit(0);
+    break;
   }
-  default:
+
+  default: {
     console.log(`Usage: quality-gate <command>
 
   report [file] [--setup "cmd"] run every gate, write a Markdown report (default quality-report.md);
@@ -121,5 +216,6 @@ switch (subcommand) {
   check-version                 fail if the package.json version was edited by hand
   check-package [--profile p]   pack, then publint (strict) and attw (default profile esm-only)
   release-notes [--from ref] [--to ref] [--repo owner/name] [--output file]`);
-    process.exit(subcommand ? 1 : 0);
+    process.exit(subcommand === "" ? 0 : 1);
+  }
 }
