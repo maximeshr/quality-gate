@@ -1,19 +1,19 @@
 // quality-gate CLI commands. Tools are dependencies of quality-gate, resolved from here,
-// so projects only add `quality-gate` (pnpm does not link transitive bins).
+// so projects only add `quality-gate` (pnpm does not link transitive bins)
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { findPackageJSON } from "node:module";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { checkChangesets, isInternal } from "./changesets.js";
 import { checkPackage } from "./check-package.js";
 import { checkVersion } from "./check-version.js";
+import { isObject, isString } from "./guards.js";
 import { releaseNotes } from "./release-notes.js";
 import { report } from "./report.js";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.join(import.meta.dirname, "..");
 
 export const USAGE = `Usage: quality-gate <command>
 
@@ -33,20 +33,56 @@ export const USAGE = `Usage: quality-gate <command>
   check-package [--profile p]   pack, then publint (strict) and attw (default profile esm-only)
   release-notes [--from ref] [--to ref] [--repo owner/name] [--output file]`;
 
-/** Absolute path of a dependency's bin script. */
-export function toolBin(pkg, name = pkg.split("/").pop()) {
+/**
+ * Absolute path of a dependency's bin script
+ *
+ * @param {string} pkg Package name
+ * @param {string} [name] Bin name, for a package with several bins
+ * @returns {string} The path of the bin script
+ */
+export const toolBin = (pkg, name = pkg.split("/").pop()) => {
   const manifestPath = findPackageJSON(pkg, import.meta.url);
-  if (!manifestPath) throw new Error(`quality-gate: cannot find the ${pkg} package`);
-  const { bin } = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const relative = typeof bin === "string" ? bin : bin[name];
-  return join(dirname(manifestPath), relative);
-}
 
-const config = (file) => join(root, "configs", file);
+  if (manifestPath === undefined || manifestPath === "") {
+    throw new Error(`quality-gate: cannot find the ${pkg} package`);
+  }
+
+  /** @type {unknown} */
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  const bin = isObject(manifest) ? manifest.bin : undefined;
+  const relative = isObject(bin) && name !== undefined ? bin[name] : bin;
+
+  if (!isString(relative)) {
+    throw new Error(`quality-gate: the ${pkg} package has no ${name} bin`);
+  }
+
+  return path.join(path.dirname(manifestPath), relative);
+};
+
+/**
+ * @param {string} file Config file name
+ * @returns {string} Its path in quality-gate
+ */
+const config = (file) => path.join(root, "configs", file);
+
+/**
+ * @param {string} pkg Package name
+ * @param {string[]} args Arguments
+ * @param {string} [name] Bin name, for a package with several bins
+ * @returns {[string, string[]]} Command and arguments running the bin with this Node
+ */
 const node = (pkg, args, name) => [process.execPath, [toolBin(pkg, name), ...args]];
 
-/** Commands shared by the report and the individual subcommands. */
+/** Commands shared by the report and the individual subcommands */
 const tools = {
+  /** @param {string[]} args Arguments for commitlint */
+  commitlint: (args) =>
+    node("@commitlint/cli", ["--config", config("commitlint.config.js"), ...args], "commitlint"),
+  deadcode: () => node("knip", []),
+  duplication: () =>
+    // No --exit-code: jscpd then fails only above the config threshold (5 %), not on every clone
+    node("jscpd", ["--config", config("jscpd.json"), "--reporters", "console"]),
+  /** @param {string[]} [files] Files to scan */
   secrets: (files = ["**/*"]) =>
     node("secretlint", [
       "--secretlintrc",
@@ -54,72 +90,230 @@ const tools = {
       "--no-maskSecrets",
       ...files,
     ]),
-  deadcode: () => node("knip", []),
-  duplication: () =>
-    // No --exit-code: jscpd then fails only above the config threshold (5 %), not on every clone.
-    node("jscpd", ["--config", config("jscpd.json"), "--reporters", "console"]),
-  commitlint: (args) =>
-    node("@commitlint/cli", ["--config", config("commitlint.config.js"), ...args], "commitlint"),
 };
 
-function run([command, args]) {
+/**
+ * @param {[string, string[]]} tool Command and arguments
+ * @returns {number} The exit code
+ */
+const run = ([command, args]) => {
   const { status } = spawnSync(command, args, { stdio: "inherit" });
-  return status ?? 1;
-}
 
+  return status ?? 1;
+};
+
+/** @type {{ type: "string" }} */
 const string = { type: "string" };
 
 /**
  * Options of each command that parses its own. `secrets` and `commitlint` pass their
- * arguments through to the tool untouched.
+ * arguments through to the tool untouched
+ *
  * @type {Record<string, { options?: Record<string, { type: "string" }>, positionals?: number }>}
  */
 const COMMANDS = {
-  report: { options: { setup: string, base: string, baseline: string }, positionals: 1 },
+  "check-changesets": { options: { base: string, title: string } },
+  "check-package": { options: { profile: string } },
+  "check-version": {},
   deadcode: {},
   duplication: {},
-  "check-changesets": { options: { base: string, title: string } },
-  "check-version": {},
-  "check-package": { options: { profile: string } },
-  "release-notes": { options: { from: string, to: string, repo: string, output: string } },
+  "release-notes": { options: { from: string, output: string, repo: string, to: string } },
+  report: { options: { base: string, baseline: string, setup: string }, positionals: 1 },
 };
 
-/** Parses a command's arguments: unknown options and extra arguments are errors. */
-export function parseCommand(command, args) {
-  const { options = {}, positionals: max = 0 } = COMMANDS[command];
+/** @typedef {Record<string, string | undefined>} Values Option values, by option name */
+
+/**
+ * Parses a command's arguments: unknown options and extra arguments are errors.
+ *
+ * @param {string} command A command of `COMMANDS`
+ * @param {string[]} args Its arguments
+ * @returns {{ values: Values, positionals: string[] }} The option values and the positional arguments
+ */
+export const parseCommand = (command, args) => {
+  const spec = Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined;
+
+  if (spec === undefined) {
+    throw new TypeError(`Unknown command '${command}'`);
+  }
+
+  const { options = {}, positionals: max = 0 } = spec;
+
   const { values, positionals } = parseArgs({
+    allowPositionals: max > 0,
     args,
     options,
-    allowPositionals: max > 0,
     strict: true,
   });
+
   if (positionals.length > max) {
     throw new TypeError(`Unexpected argument '${positionals[max]}'`);
   }
+
   return { values, positionals };
-}
+};
+
+/**
+ * @param {Values} values Options of `report`
+ * @param {string[]} positionals Its output file, if any
+ * @returns {number} The exit code
+ */
+const reportCommand = (values, positionals) => {
+  const output = positionals[0] ?? "quality-report.md";
+  const { setup, base, baseline } = values;
+  const { markdown, failed } = report({ base, baseline, setup, tools });
+
+  writeFileSync(output, markdown);
+  process.stdout.write(markdown);
+
+  return failed ? 1 : 0;
+};
+
+/**
+ * @param {Values} values Options of `check-changesets`
+ * @returns {number} The exit code
+ */
+const checkChangesetsCommand = (values) => {
+  const { title, base = "origin/canary" } = values;
+  const errors = checkChangesets({ base, title });
+
+  for (const error of errors) {
+    console.error(`✖ ${error}`);
+  }
+
+  if (errors.length > 0) {
+    return 1;
+  }
+
+  console.log(
+    isInternal(title)
+      ? "✔ internal pull request (ci, build, test, docs, chore): no changeset required"
+      : "✔ changesets are present and useful",
+  );
+
+  return 0;
+};
+
+/** @returns {Promise<number>} The exit code of `check-version` */
+const checkVersionCommand = async () => {
+  const error = await checkVersion();
+
+  if (error !== undefined) {
+    console.error(error);
+
+    return 1;
+  }
+
+  return 0;
+};
+
+/**
+ * @param {Values} values Options of `check-package`
+ * @returns {Promise<number>} The exit code
+ */
+const checkPackageCommand = async (values) => {
+  const ok = await checkPackage({
+    attwBin: toolBin("@arethetypeswrong/cli", "attw"),
+    profile: values.profile ?? "esm-only",
+  });
+
+  return ok ? 0 : 1;
+};
+
+/**
+ * @param {Values} values Options of `release-notes`
+ * @returns {number} The exit code
+ */
+const releaseNotesCommand = (values) => {
+  const markdown = releaseNotes({
+    from: values.from ?? "origin/main",
+    repository: values.repo ?? process.env.GITHUB_REPOSITORY,
+    to: values.to ?? "HEAD",
+  });
+
+  if (values.output !== undefined && values.output !== "") {
+    writeFileSync(values.output, markdown);
+  } else {
+    process.stdout.write(markdown);
+  }
+
+  return 0;
+};
+
+/**
+ * @param {string} command A command of `COMMANDS`
+ * @param {{ values: Values, positionals: string[] }} parsed Its parsed arguments
+ * @returns {Promise<number>} The exit code
+ */
+const runCommand = async (command, { values, positionals }) => {
+  switch (command) {
+    case "report": {
+      return reportCommand(values, positionals);
+    }
+
+    case "deadcode": {
+      return run(tools.deadcode());
+    }
+
+    case "duplication": {
+      return run(tools.duplication());
+    }
+
+    case "check-changesets": {
+      return checkChangesetsCommand(values);
+    }
+
+    case "check-version": {
+      return await checkVersionCommand();
+    }
+
+    case "check-package": {
+      return await checkPackageCommand(values);
+    }
+
+    case "release-notes": {
+      return releaseNotesCommand(values);
+    }
+
+    default: {
+      return 0;
+    }
+  }
+};
 
 /**
  * Runs one CLI command.
- * @param {string[]} argv the arguments after the executable and script
- * @returns {Promise<number>} the exit code
+ *
+ * @param {string[]} argv The arguments after the executable and script
+ * @returns {Promise<number>} The exit code
  */
-export async function main(argv) {
-  const [command, ...args] = argv;
+export const main = async (argv) => {
+  const [command = "", ...args] = argv;
 
-  if (command === "secrets") return run(tools.secrets(args.length > 0 ? args : undefined));
-  if (command === "commitlint") return run(tools.commitlint(args));
-  if (!command || !(command in COMMANDS)) {
-    if (command && command !== "help" && command !== "--help") {
+  if (command === "secrets") {
+    return run(tools.secrets(args.length > 0 ? args : undefined));
+  }
+
+  if (command === "commitlint") {
+    return run(tools.commitlint(args));
+  }
+
+  if (!Object.hasOwn(COMMANDS, command)) {
+    if (command !== "" && command !== "help" && command !== "--help") {
       console.error(`quality-gate: unknown command '${command}'\n`);
       console.error(USAGE);
+
       return 1;
     }
+
     console.log(USAGE);
+
     return 0;
   }
 
+  /** @type {{ values: Values, positionals: string[] }} */
   let parsed;
+
   try {
     parsed = parseCommand(command, args);
   } catch (error) {
@@ -127,57 +321,9 @@ export async function main(argv) {
       `quality-gate ${command}: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     console.error(USAGE);
+
     return 1;
   }
-  const { values, positionals } = parsed;
 
-  switch (command) {
-    case "report": {
-      const output = positionals[0] ?? "quality-report.md";
-      const { setup, base, baseline } = values;
-      const { markdown, failed } = report({ tools, setup, base, baseline });
-      writeFileSync(output, markdown);
-      process.stdout.write(markdown);
-      return failed ? 1 : 0;
-    }
-    case "deadcode":
-      return run(tools.deadcode());
-    case "duplication":
-      return run(tools.duplication());
-    case "check-changesets": {
-      const { title, base = "origin/canary" } = values;
-      const errors = checkChangesets({ base, title });
-      for (const error of errors) console.error(`✖ ${error}`);
-      if (errors.length > 0) return 1;
-      console.log(
-        isInternal(title)
-          ? "✔ internal pull request (ci, build, test, docs, chore): no changeset required"
-          : "✔ changesets are present and useful",
-      );
-      return 0;
-    }
-    case "check-version": {
-      const error = await checkVersion();
-      if (error) console.error(error);
-      return error ? 1 : 0;
-    }
-    case "check-package": {
-      const ok = await checkPackage({
-        attwBin: toolBin("@arethetypeswrong/cli", "attw"),
-        profile: values.profile ?? "esm-only",
-      });
-      return ok ? 0 : 1;
-    }
-    case "release-notes": {
-      const markdown = releaseNotes({
-        from: values.from ?? "origin/main",
-        to: values.to ?? "HEAD",
-        repository: values.repo ?? process.env.GITHUB_REPOSITORY,
-      });
-      if (values.output) writeFileSync(values.output, markdown);
-      else process.stdout.write(markdown);
-      return 0;
-    }
-  }
-  return 0;
-}
+  return await runCommand(command, parsed);
+};

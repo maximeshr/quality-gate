@@ -1,19 +1,20 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { checkPackage } from "../scripts/check-package.js";
 import { toolBin } from "../scripts/cli.js";
 
 const attwBin = toolBin("@arethetypeswrong/cli", "attw");
 
-/** A minimal ESM package; `manifest` overrides its package.json fields. */
-function pkg(manifest: object = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "quality-gate-package-"));
+/** A minimal ESM package, `manifest` overrides its package.json fields */
+const pkg = (manifest: { files?: string[] } = {}) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "quality-gate-package-"));
+
   writeFileSync(
-    join(dir, "package.json"),
+    path.join(dir, "package.json"),
     JSON.stringify({
       name: "some-lib",
       version: "1.0.0",
@@ -23,13 +24,14 @@ function pkg(manifest: object = {}) {
       ...manifest,
     }),
   );
-  writeFileSync(join(dir, "index.js"), "export const answer = 42;\n");
-  writeFileSync(join(dir, "index.d.ts"), "export declare const answer: number;\n");
-  return dir;
-}
+  writeFileSync(path.join(dir, "index.js"), "export const answer = 42;\n");
+  writeFileSync(path.join(dir, "index.d.ts"), "export declare const answer: number;\n");
 
-// Packs real tarballs with pnpm, then runs publint and attw on them.
-describe("checkPackage", { timeout: 60_000 }, () => {
+  return dir;
+};
+
+// Packs real tarballs with pnpm, then runs publint and attw on them
+describe(checkPackage, { timeout: 60_000 }, () => {
   const previous = process.cwd();
 
   beforeEach(() => {
@@ -42,15 +44,15 @@ describe("checkPackage", { timeout: 60_000 }, () => {
     vi.restoreAllMocks();
   });
 
-  test("passes on a well-formed ESM package", async () => {
+  it("passes on a well-formed ESM package", async () => {
     process.chdir(pkg());
-    expect(await checkPackage({ attwBin })).toBe(true);
+    await expect(checkPackage({ attwBin })).resolves.toBeTruthy();
   });
 
-  test("fails when publint finds an issue", async () => {
-    // The published types file is missing from the tarball.
+  it("fails when publint finds an issue", async () => {
+    // The published types file is missing from the tarball
     process.chdir(pkg({ files: ["index.js"] }));
-    expect(await checkPackage({ attwBin })).toBe(false);
-    expect(vi.mocked(console.error).mock.calls.flat().join("\n")).toMatch(/publint/);
+    await expect(checkPackage({ attwBin })).resolves.toBeFalsy();
+    expect(vi.mocked(console.error).mock.calls.flat().join("\n")).toMatch(/publint/u);
   });
 });
