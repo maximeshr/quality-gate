@@ -1,5 +1,11 @@
 # quality-gate
 
+## 0.8.1
+
+### Patch Changes
+
+- 6ee8f99: Dependencies: chore(deps): bump the minor-and-patch group with 2 updates.
+
 ## 0.8.0
 
 ### Minor Changes
