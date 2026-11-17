@@ -55,10 +55,7 @@ The tools (Knip, jscpd, secretlint, commitlint, the lint presets and plugins) ar
 
 ### Release age
 
-New versions wait 14 days (`minimumReleaseAge: 20160` in `pnpm-workspace.yaml`, `cooldown` in Dependabot). vite-plus and the quality tools tied to it (`@voidzero-dev/vite-plus-*`, `oxlint`, `@oxlint/*`, `oxfmt`, `oxlint-tsgolint`, `@oxc-project/*`, `ultracite`) only wait **5 days**:
-
-- pnpm has no per-package age, so they go in `minimumReleaseAgeExclude` as **exact versions**, each checked to be at least 5 days old, with the check date and the age-out date. Only their platform binaries (`@oxlint/binding-*`, ...) are listed by name: the exact parent package pins their version. Remove the exclusions once they age out.
-- Dependabot has one cooldown per ecosystem, so it keeps 14 days for them: upgrading earlier is a hand-made pull request that moves the whole group.
+New versions wait 5 days: `minimumReleaseAge: 7200` in `pnpm-workspace.yaml` and `cooldown.default-days: 5` in Dependabot, one window for every package. An exception (security fix, version already shipped) is excluded as an exact version, with its reason and age-out date, and removed once aged out.
 
 ## Usage
 
@@ -276,7 +273,7 @@ changesets:
 | Merge button         | **merge commits only**: squash and rebase merging are disabled (`gh api -X PATCH repos/<owner>/<repo> -F allow_merge_commit=true -F allow_squash_merge=false -F allow_rebase_merge=false`). Both rewrite commits, so `main` would no longer contain the `canary` commits.                                                                                                                               |
 | Actions              | _Allow GitHub Actions to create and approve pull requests_ on (`gh api -X PUT repos/<owner>/<repo>/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true`), or the release pull request cannot be opened.                                                                                                                                          |
 | Release deploy key   | an ed25519 key with write access; its private key in the `RELEASE_DEPLOY_KEY` secret for **Actions and Dependabot** (`gh secret set RELEASE_DEPLOY_KEY --app dependabot`).                                                                                                                                                                                                                              |
-| Dependabot           | `target-branch: canary`, 14-day cooldown; alerts and security updates on.                                                                                                                                                                                                                                                                                                                               |
+| Dependabot           | `target-branch: canary`, 5-day cooldown; alerts and security updates on.                                                                                                                                                                                                                                                                                                                                |
 | npm (published libs) | trusted publisher: this repository, workflow `release.yml`, no environment.                                                                                                                                                                                                                                                                                                                             |
 | Merge                | _Automatically delete head branches_ can stay on: GitHub never deletes the default branch, and the ruleset protects `main`.                                                                                                                                                                                                                                                                             |
 

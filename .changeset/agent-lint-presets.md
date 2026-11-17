@@ -6,4 +6,6 @@ The base config now lints with the Ultracite Oxlint presets (`core`, `vitest`), 
 
 Upgrading reports many new errors in existing projects. Run `vp check --fix`, then `vp lint --fix --fix-suggestions`, review the result, and fix the rest by hand: see "Lint rules" in the README.
 
-The rules need the Oxlint of vite-plus 1.6.0 (Oxlint 1.93, Vitest 5.1.0): upgrade the project's vite-plus to 1.6.0 and `@vitest/coverage-v8` to 5.1.0 in the same pull request, with the `minimumReleaseAgeExclude` block of quality-gate's `pnpm-workspace.yaml` (vite-plus and its quality tools now wait 5 days instead of 14, as exact versions).
+The rules need the Oxlint of vite-plus 1.6.0 (Oxlint 1.93, Vitest 5.1.0): upgrade the project's vite-plus to 1.6.0 and `@vitest/coverage-v8` to 5.1.0 in the same pull request.
+
+New versions now wait 5 days instead of 14, for every package: set `minimumReleaseAge: 7200` in `pnpm-workspace.yaml`, drop the exclusions older than 5 days, and set the Dependabot `cooldown.default-days` to 5.
