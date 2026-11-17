@@ -131,7 +131,7 @@ const COMMANDS = {
  * @returns {{ values: Values, positionals: string[] }} The option values and the positional arguments
  */
 export const parseCommand = (command, args) => {
-  const spec = COMMANDS[command];
+  const spec = Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined;
 
   if (spec === undefined) {
     throw new TypeError(`Unknown command '${command}'`);
@@ -298,7 +298,7 @@ export const main = async (argv) => {
     return run(tools.commitlint(args));
   }
 
-  if (command === "" || !(command in COMMANDS)) {
+  if (!Object.hasOwn(COMMANDS, command)) {
     if (command !== "" && command !== "help" && command !== "--help") {
       console.error(`quality-gate: unknown command '${command}'\n`);
       console.error(USAGE);

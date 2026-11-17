@@ -35,6 +35,10 @@ describe(parseCommand, () => {
     });
   });
 
+  it("rejects a command inherited from Object.prototype", () => {
+    expect(() => parseCommand("toString", [])).toThrow(/Unknown command 'toString'/u);
+  });
+
   it("rejects an unknown option", () => {
     expect(() => parseCommand("check-package", ["--profle", "node16"])).toThrow(/profle/u);
   });
@@ -67,6 +71,14 @@ describe(main, () => {
     await expect(main(["lint"])).resolves.toBe(1);
     expect(printed(error)).toContain("unknown command 'lint'");
   });
+
+  it.each(["toString", "constructor", "__proto__"])(
+    "fails on %s, inherited from Object.prototype",
+    async (command) => {
+      await expect(main([command])).resolves.toBe(1);
+      expect(printed(error)).toContain(`unknown command '${command}'`);
+    },
+  );
 
   it("fails on an unknown option, with the usage", async () => {
     await expect(main(["release-notes", "--form", "v1.0.0"])).resolves.toBe(1);
