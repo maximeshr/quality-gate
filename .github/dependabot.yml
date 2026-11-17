@@ -17,9 +17,19 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     groups:
-      # vite-plus pins its vite core and vitest: bump them together.
+      # vite-plus pins its vite core, vitest and Oxlint; Ultracite's rules follow that Oxlint: bump them together.
       vite-plus:
-        patterns: ["vite-plus", "vite", "vitest", "@vitest/*", "@voidzero-dev/*"]
+        patterns:
+          [
+            "vite-plus",
+            "vite",
+            "vitest",
+            "@vitest/*",
+            "@voidzero-dev/*",
+            "oxlint",
+            "@oxlint/*",
+            "ultracite",
+          ]
       minor-and-patch:
         update-types: [minor, patch]
 

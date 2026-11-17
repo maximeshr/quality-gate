@@ -1,11 +1,11 @@
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
-  vite-plus: 1.4.0
+  vite: npm:@voidzero-dev/vite-plus-core@1.6.0
+  vite-plus: 1.6.0
 
 overrides:
   vite@*: "catalog:"
-  # Same Vitest copy as `vp test` (vite-plus 1.4.0 bundles 5.0.5).
-  vitest@*: "5.0.5"
+  # Same Vitest copy as `vp test` (vite-plus 1.6.0 bundles 5.1.0).
+  vitest@*: "5.1.0"
 
 peerDependencyRules:
   allowAny:
@@ -16,13 +16,21 @@ peerDependencyRules:
 # Let fresh releases settle for 14 days (in minutes).
 minimumReleaseAge: 20160
 minimumReleaseAgeExclude:
-  # vite-plus 1.4.0 (2026-10-23) fixes RUSTSEC-2026-0382/0383/0384. Ages out on 2026-11-06.
-  - vite-plus
-  - "@voidzero-dev/*"
-  - "@oxc-project/*"
-  - "@oxfmt/*"
-  - "@oxlint/*"
-  - oxfmt
-  - oxlint
-  - oxlint-tsgolint
+  # vite-plus and the quality tools tied to it: 5 days minimum, exact versions only.
+  # Checked 2026-11-17: the youngest is ultracite@8.2.0 (2026-11-12). All age out by 2026-11-26.
+  - vite-plus@1.6.0
+  - "@voidzero-dev/vite-plus-core@1.6.0"
+  - oxlint@1.93.0
+  - "@oxlint/plugins@1.93.0"
+  - oxfmt@0.78.0
+  - oxlint-tsgolint@7.0.2006
+  - "@oxc-project/runtime@0.158.0"
+  - "@oxc-project/types@0.158.0"
+  - ultracite@8.2.0
+  # Platform binaries: their version is pinned by the exact packages above.
+  - "@voidzero-dev/vite-plus-darwin-*"
+  - "@voidzero-dev/vite-plus-linux-*"
+  - "@voidzero-dev/vite-plus-win32-*"
+  - "@oxlint/binding-*"
+  - "@oxfmt/binding-*"
   - "@oxlint-tsgolint/*"

@@ -51,7 +51,14 @@ vp add -D "quality-gate@github:maximeshr/quality-gate#v0.4.0" @vitest/coverage-v
     quality-gate: false
   ```
 
-The tools (Knip, jscpd, secretlint, commitlint) are dependencies of quality-gate: the project does not add them.
+The tools (Knip, jscpd, secretlint, commitlint, the lint presets and plugins) are dependencies of quality-gate: the project does not add them.
+
+### Release age
+
+New versions wait 14 days (`minimumReleaseAge: 20160` in `pnpm-workspace.yaml`, `cooldown` in Dependabot). vite-plus and the quality tools tied to it (`@voidzero-dev/vite-plus-*`, `oxlint`, `@oxlint/*`, `oxfmt`, `oxlint-tsgolint`, `@oxc-project/*`, `ultracite`) only wait **5 days**:
+
+- pnpm has no per-package age, so they go in `minimumReleaseAgeExclude` as **exact versions**, each checked to be at least 5 days old, with the check date and the age-out date. Only their platform binaries (`@oxlint/binding-*`, ...) are listed by name: the exact parent package pins their version. Remove the exclusions once they age out.
+- Dependabot has one cooldown per ecosystem, so it keeps 14 days for them: upgrading earlier is a hand-made pull request that moves the whole group.
 
 ## Usage
 
@@ -96,7 +103,7 @@ The base config lints with three rule sets, all at `error`, written for code tha
 - `comments/no-restating-comment` flags a one-line comment whose every word, minus filler words, already appears in the code it sits on or above (`// get the user` over `const user = getUser(id)`). Delete it or say _why_ the code is this way.
 - `comments/require-suppression-reason` wants `// oxlint-disable-next-line <rule> -- <why the rule is wrong here>`. A suppression is for a rule that is wrong at that line, not for code that is hard to fix.
 - Most findings are fixable: run `vp check --fix`, then `vp lint --fix --fix-suggestions` for the suggestion fixes (blank lines, `toStrictEqual`), and fix the rest by hand. Review the suggestion fixes: `vitest/consistent-test-it` renames `test` to `it` without updating the import.
-- Ultracite's version follows the Oxlint bundled with vite-plus: Ultracite 8.1.1 needs Oxlint 1.90 rules, so quality-gate pins 8.1.0 until vite-plus ships Oxlint 1.90.
+- Ultracite, `oxlint` and `@oxlint/plugins` follow the Oxlint bundled with vite-plus (a newer Ultracite can name rules an older Oxlint lacks: `Rule '…' not found`). Upgrade them together with vite-plus, in quality-gate and in every project.
 
 ### Git hooks
 
