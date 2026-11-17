@@ -3,11 +3,7 @@
 // A hand-edited version has neither and fails
 import { existsSync, readFileSync } from "node:fs";
 
-/**
- * @param {unknown} value Parsed JSON
- * @returns {value is Record<string, unknown>} true for an object or an array
- */
-const isObject = (value) => value instanceof Object;
+import { isObject } from "./guards.js";
 
 /**
  * Whether the npm registry has this version, throwing when it cannot tell.

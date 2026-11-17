@@ -3,13 +3,16 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { checkChangesets, isInternal, parseChangeset } from "../scripts/changesets.js";
 import { releaseNotes } from "../scripts/release-notes.js";
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf-8" });
+
+/** A pull request lookup that always fails */
+const failing = vi.fn<(repository: string, sha: string) => string | undefined>();
 
 describe(parseChangeset, () => {
   it("reads the bumps and the summary", () => {
@@ -111,7 +114,7 @@ describe("releaseNotes pull requests", () => {
   const previous = process.cwd();
 
   beforeEach(() => {
-    repo = mkdtempSync(join(tmpdir(), "quality-gate-notes-"));
+    repo = mkdtempSync(path.join(tmpdir(), "quality-gate-notes-"));
     git(repo, "init", "-q", "-b", "canary");
     git(repo, "config", "user.email", "test@example.com");
     git(repo, "config", "user.name", "Test");
@@ -125,25 +128,27 @@ describe("releaseNotes pull requests", () => {
     process.chdir(previous);
   });
 
-  test("lists each pull request once, sorted, without the release pull requests", () => {
+  it("lists each pull request once, sorted, without the release pull requests", () => {
     const asked: string[] = [];
+
     const pulls = (repository: string, sha: string) => {
       asked.push(repository);
-      // Both commits belong to #12 and #4; #30 is the release pull request into main.
+
+      // Both commits belong to #12 and #4, and #30 is the release pull request into main
       return sha.length === 40
         ? "12\tfeat: one\talice\tcanary\n4\tfix: two\tbob\tcanary\n30\tRelease pkg@1.0.0\tbot\tmain\n"
         : undefined;
     };
+
     const notes = releaseNotes({ from: "HEAD~2", to: "HEAD", repository: "o/r", pulls });
 
-    expect(asked).toEqual(["o/r", "o/r"]);
+    expect(asked).toStrictEqual(["o/r", "o/r"]);
     expect(notes).toContain("### Pull requests\n\n- #4 fix: two (bob)\n- #12 feat: one (alice)\n");
     expect(notes).not.toContain("#30");
     expect(notes).toContain("_No pending changeset._");
   });
 
-  test("skips a commit whose lookup fails, and the section without a repository", () => {
-    const failing = () => undefined;
+  it("skips a commit whose lookup fails, and the section without a repository", () => {
     expect(
       releaseNotes({ from: "HEAD~2", to: "HEAD", repository: "o/r", pulls: failing }),
     ).not.toContain("### Pull requests");
@@ -152,7 +157,7 @@ describe("releaseNotes pull requests", () => {
     );
   });
 
-  test("says when the range has no commit", () => {
+  it("says when the range has no commit", () => {
     expect(releaseNotes({ from: "HEAD", to: "HEAD" })).toContain("### Commits\n\n_No commit._");
   });
 });
