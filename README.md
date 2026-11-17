@@ -24,15 +24,15 @@ The base configuration only changes when a rule is wrong for every project. A pr
 
 ### Gates
 
-| Gate                           | Tool                                                                                                        | Config                                                |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with `vite-plus/prefer-vite-plus-imports`, TypeScript) | `quality-gate/vite`                                   |
-| Tests + coverage               | `vp test --coverage`                                                                                        | `quality-gate/vite`                                   |
-| Dead code, unused dependencies | Knip                                                                                                        | zero-config (`knip.json` only for structural entries) |
-| Duplication                    | jscpd on `src/` (Markdown excluded): fails above 5 % duplicated, not on each clone                          | `configs/jscpd.json`                                  |
-| Secrets                        | secretlint, recommended preset                                                                              | `configs/secretlintrc.json`                           |
-| SAST                           | Semgrep `p/typescript` + `p/nodejs` (CI only)                                                               | —                                                     |
-| Build                          | `vp run build`, when the project has a `build` script                                                       | the project                                           |
+| Gate                           | Tool                                                                                                 | Config                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with the [lint rules](#lint-rules), TypeScript) | `quality-gate/vite`                                   |
+| Tests + coverage               | `vp test --coverage`                                                                                 | `quality-gate/vite`                                   |
+| Dead code, unused dependencies | Knip                                                                                                 | zero-config (`knip.json` only for structural entries) |
+| Duplication                    | jscpd on `src/` (Markdown excluded): fails above 5 % duplicated, not on each clone                   | `configs/jscpd.json`                                  |
+| Secrets                        | secretlint, recommended preset                                                                       | `configs/secretlintrc.json`                           |
+| SAST                           | Semgrep `p/typescript` + `p/nodejs` (CI only)                                                        | —                                                     |
+| Build                          | `vp run build`, when the project has a `build` script                                                | the project                                           |
 
 Commit messages follow Conventional Commits (`configs/commitlint.config.js`). The report runs every gate even when one fails, and lists each failure with its output.
 
@@ -73,7 +73,30 @@ export default defineConfig({
 });
 ```
 
-Remove the project's own `lint` and `fmt` blocks: they come from the base. Use `defineQualityGate({ ignore: [".astro/**"] })` instead of `qualityGate` to ignore generated folders.
+Remove the project's own `lint` and `fmt` blocks: they come from the base. Use `defineQualityGate` instead of `qualityGate` to ignore generated folders or add the Ultracite preset of the project's framework:
+
+```ts
+const base = defineQualityGate({ ignore: [".astro/**"], presets: ["astro"] });
+```
+
+`presets` accepts `astro`, `next`, `playwright`, `react`, `svelte` and `vue`. They go between the core and anti-slop presets.
+
+### Lint rules
+
+The base config lints with three rule sets, all at `error`, written for code that agents and people write together:
+
+| Rule set                                                                 | Source                                                                                                                                                                               | What it rejects                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Ultracite](https://www.ultracite.ai/providers/oxlint) `core` + `vitest` | npm `ultracite`, imported as `ultracite/oxlint/<preset>`                                                                                                                             | ~470 correctness, style and type-aware rules: unsafe `any`, non-strict boolean checks, missing braces, `function` declarations, regexes without the `u` flag, unsorted keys, ...                                                                                                        |
+| [anti-slop](https://github.com/dmmulroy/anti-slop) by Dillon Mulroy      | `ultracite/oxlint/anti-slop`, the copy Ultracite vendors                                                                                                                             | low-evidence patterns: unjustified type assertions (a `// SAFETY:` comment states the invariant), `unknown` leaking through signatures, `typeof` outside type guards, object parameters, module mocking, missing blank lines between blocks                                             |
+| Comment rules                                                            | [`eslint-plugin-no-comment-slop`](https://github.com/jantimon/eslint-plugin-no-comment-slop) (all 12 rules) and the `comments` plugin of quality-gate (`quality-gate/oxlint-plugin`) | comments longer than 3 lines, trailing comments, banners, jargon, em dashes, prose semicolons, trailing periods, `//` on exports; comments that restate the code; `eslint-disable` / `oxlint-disable` without a `-- reason`; `@ts-ignore`, and `@ts-expect-error` without a description |
+
+- anti-slop has no official npm package: its README asks to vendor it. Ultracite's copy is that vendored build. Never install the `oxlint-plugin-anti-slop` npm package: it is not Dillon Mulroy's.
+- The comment plugins are loaded from absolute paths, so the project installs nothing besides quality-gate.
+- `comments/no-restating-comment` flags a one-line comment whose every word, minus filler words, already appears in the code it sits on or above (`// get the user` over `const user = getUser(id)`). Delete it or say _why_ the code is this way.
+- `comments/require-suppression-reason` wants `// oxlint-disable-next-line <rule> -- <why the rule is wrong here>`. A suppression is for a rule that is wrong at that line, not for code that is hard to fix.
+- Most findings are fixable: run `vp check --fix`, then `vp lint --fix --fix-suggestions` for the suggestion fixes (blank lines, `toStrictEqual`), and fix the rest by hand. Review the suggestion fixes: `vitest/consistent-test-it` renames `test` to `it` without updating the import.
+- Ultracite's version follows the Oxlint bundled with vite-plus: Ultracite 8.1.1 needs Oxlint 1.90 rules, so quality-gate pins 8.1.0 until vite-plus ships Oxlint 1.90.
 
 ### Git hooks
 
