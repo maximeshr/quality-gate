@@ -1,46 +1,53 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { checkVersion } from "../scripts/check-version.js";
 
-function project({ version, changelog }: { version: string; changelog?: string }) {
-  const cwd = mkdtempSync(join(tmpdir(), "quality-gate-version-"));
-  writeFileSync(join(cwd, "package.json"), JSON.stringify({ name: "some-lib", version }));
-  if (changelog !== undefined) writeFileSync(join(cwd, "CHANGELOG.md"), changelog);
+const project = ({ version, changelog }: { version: string; changelog?: string }) => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "quality-gate-version-"));
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ name: "some-lib", version }));
+
+  if (changelog !== undefined) {
+    writeFileSync(path.join(cwd, "CHANGELOG.md"), changelog);
+  }
+
   return cwd;
-}
+};
 
-const registry = (status: number) => (async () => new Response(null, { status })) as typeof fetch;
+const registry = (status: number) =>
+  vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status }));
 
-describe("checkVersion", () => {
-  test("passes when changeset version wrote the CHANGELOG heading", async () => {
+describe(checkVersion, () => {
+  it("passes when changeset version wrote the CHANGELOG heading", async () => {
     const cwd = project({
-      version: "1.2.0",
       changelog: "# some-lib\n\n## 1.2.0\n\n### Minor Changes\n",
+      version: "1.2.0",
     });
-    expect(await checkVersion({ cwd, fetch: registry(500) })).toBeUndefined();
+
+    await expect(checkVersion({ cwd, fetch: registry(500) })).resolves.toBeUndefined();
   });
 
-  test("passes when the version is already published", async () => {
-    expect(
-      await checkVersion({ cwd: project({ version: "1.1.0" }), fetch: registry(200) }),
-    ).toBeUndefined();
+  it("passes when the version is already published", async () => {
+    await expect(
+      checkVersion({ cwd: project({ version: "1.1.0" }), fetch: registry(200) }),
+    ).resolves.toBeUndefined();
   });
 
-  test("fails on a hand-edited version", async () => {
+  it("fails on a hand-edited version", async () => {
     const error = await checkVersion({
-      cwd: project({ version: "9.9.9", changelog: "## 1.0.0\n" }),
+      cwd: project({ changelog: "## 1.0.0\n", version: "9.9.9" }),
       fetch: registry(404),
     });
-    expect(error).toMatch(/some-lib@9\.9\.9 is neither published nor in CHANGELOG\.md/);
+
+    expect(error).toMatch(/some-lib@9\.9\.9 is neither published nor in CHANGELOG\.md/u);
   });
 
-  test("throws when the registry cannot answer", async () => {
+  it("throws when the registry cannot answer", async () => {
     await expect(
       checkVersion({ cwd: project({ version: "1.0.0" }), fetch: registry(503) }),
-    ).rejects.toThrow(/503/);
+    ).rejects.toThrow(/503/u);
   });
 });

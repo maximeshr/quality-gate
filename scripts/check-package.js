@@ -3,38 +3,49 @@
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 import { publint } from "publint";
 import { formatMessage } from "publint/utils";
 
 /**
- * @param {{ attwBin: string, profile?: string }} options
+ * @param {{ attwBin: string, profile?: string }} options Path of the attw bin, and the attw profile
  * @returns {Promise<boolean>} true when both checks pass
  */
-export async function checkPackage({ attwBin, profile = "esm-only" }) {
-  // Windows resolves pnpm through a .cmd shim, which needs a shell.
+export const checkPackage = async ({ attwBin, profile = "esm-only" }) => {
+  // Windows resolves pnpm through a .cmd shim, which needs a shell
   const shell = process.platform === "win32";
-  const dir = await mkdtemp(join(tmpdir(), "quality-gate-pack-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "quality-gate-pack-"));
+
   try {
-    // `npm pack` refuses to run when devEngines pins pnpm.
-    execFileSync("pnpm", ["pack", "--pack-destination", dir], { stdio: "ignore", shell });
+    // `npm pack` refuses to run when devEngines pins pnpm
+    execFileSync("pnpm", ["pack", "--pack-destination", dir], { shell, stdio: "ignore" });
     const [name] = await readdir(dir);
-    if (!name) throw new Error("pnpm pack produced no tarball");
-    const file = join(dir, name);
+
+    if (name === undefined || name === "") {
+      throw new Error("pnpm pack produced no tarball");
+    }
+
+    const file = path.join(dir, name);
 
     const tarball = await readFile(file);
+
     const { messages, pkg } = await publint({
       pack: {
         tarball: tarball.buffer.slice(tarball.byteOffset, tarball.byteOffset + tarball.length),
       },
       strict: true,
     });
-    for (const message of messages)
-      console.error(`publint ${message.type}: ${formatMessage(message, pkg)}`);
-    if (messages.length === 0) console.log("publint: no issues");
 
-    // The stack is ESM only: CommonJS consumers load packages with import().
+    for (const message of messages) {
+      console.error(`publint ${message.type}: ${formatMessage(message, pkg)}`);
+    }
+
+    if (messages.length === 0) {
+      console.log("publint: no issues");
+    }
+
+    // The stack is ESM only: CommonJS consumers load packages with import()
     try {
       execFileSync(
         process.execPath,
@@ -46,8 +57,9 @@ export async function checkPackage({ attwBin, profile = "esm-only" }) {
     } catch {
       return false;
     }
+
     return messages.length === 0;
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await rm(dir, { force: true, recursive: true });
   }
-}
+};
