@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "okq",
+  "description": "Agent skills for OKQ projects, shipped with quality-gate",
+  "owner": { "name": "Maxime Sahroui" },
+  "plugins": [
+    {
+      "name": "okq",
+      "description": "OKQ stack skills: okq-stack, align-project, merge-risk, delete-comments",
+      "source": "./"
+    }
+  ]
+}

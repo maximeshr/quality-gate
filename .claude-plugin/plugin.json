@@ -1,0 +1,7 @@
+{
+  "name": "okq",
+  "description": "OKQ stack skills: the conventions (okq-stack), project alignment (align-project), merge risk assessment (merge-risk) and comment cleanup (delete-comments)",
+  "author": { "name": "Maxime Sahroui" },
+  "homepage": "https://github.com/maximeshr/quality-gate",
+  "license": "MIT"
+}
