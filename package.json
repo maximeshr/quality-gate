@@ -13,9 +13,11 @@
     "quality-gate": "./bin/quality-gate.js"
   },
   "files": [
+    ".claude-plugin",
     "bin",
     "configs",
     "scripts",
+    "skills",
     "src",
     "templates"
   ],

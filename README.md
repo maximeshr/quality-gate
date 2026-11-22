@@ -201,9 +201,35 @@ READMEs follow [Standard Readme](https://github.com/RichardLitt/standard-readme)
 
 They ship with the package: `node_modules/quality-gate/templates/`.
 
+### Agent skills
+
+quality-gate is also a [Claude Code plugin marketplace](https://docs.claude.com/en/docs/claude-code/plugins). Its `okq` plugin ships the agent skills of the OKQ stack:
+
+| Skill             | Use                                                                                                |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `okq-stack`       | the conventions and day-to-day operations                                                          |
+| `align-project`   | bring a project onto the stack, audit it (`scripts/audit.sh`), apply the repository settings       |
+| `merge-risk`      | assess a pull request before merging; vendored from [Warp](https://www.warp.dev/merge-risk) (MIT)  |
+| `delete-comments` | audit comments: delete tautologies and stale ones, move decisions into ADRs, file issues for hacks |
+
+Enable it in the project's `.claude/settings.json`, pinned to the same tag as the dependency:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "okq": { "source": { "source": "github", "repo": "maximeshr/quality-gate", "ref": "vX.Y.Z" } }
+  },
+  "enabledPlugins": { "okq@okq": true }
+}
+```
+
+Claude Code prefixes plugin skills: `/okq:merge-risk`, `/okq:delete-comments`.
+
+To install it by hand instead (Claude Code 2.1.275 or later): `/plugin install okq --marketplace maximeshr/quality-gate`.
+
 ### Upgrade quality-gate
 
-Bump the same tag in `package.json` and in the workflow `uses:` lines, then run `vp install`.
+Bump the same tag in `package.json`, in the workflow `uses:` lines and in the `okq` plugin `ref` of `.claude/settings.json`, then run `vp install`.
 
 ## Branches and releases
 
