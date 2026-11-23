@@ -29,7 +29,7 @@ Pull request into the **current** default branch (`main` before the migration), 
 - **Lint rules**: fix the findings of the base rule sets in the project (elements.md, "Lint rules"): auto fixes, reviewed suggestion fixes, then hand fixes, one commit each.
 - **Formatting** in its **own commit** (`style: format with the OKQ base config`) when the base style differs, so the review stays readable.
 - **Scripts baseline** (quality-gate README, "Scripts"); `prepare: vp config` (plus the type generator when the framework needs it, e.g. `astro sync`).
-- **Hooks**: `.vite-hooks/pre-commit` (`vp staged`), `commit-msg` (`vp exec quality-gate commitlint --edit "$1"`), `pre-push` (full check, tests, `deadcode`, `duplication`).
+- **Hooks**: `.vite-hooks/pre-commit` (`vp staged`), `commit-msg` (`vp exec quality-gate commitlint --edit "$1"`), `pre-push` (full check, tests, `comments`, `deadcode`, `duplication`).
 - **`quality.yml`** with the `report` job only, `pull_request:` without branch filter (the branch flow comes in phase 3); `setup:` when types are generated.
 - Run `vp exec quality-gate report` and **fix the project, not the base**. Each fix is reviewable: unexported internals, deleted dead code, declared Knip entries for what Knip cannot see. Never remove a public export.
 - Proof in the pull request: the commands and their real output.

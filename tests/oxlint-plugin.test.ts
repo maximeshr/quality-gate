@@ -1,7 +1,7 @@
 import { RuleTester } from "oxlint/plugins-dev";
 import { describe, it } from "vite-plus/test";
 
-import { noRestatingComment, requireSuppressionReason } from "../src/oxlint-plugin.js";
+import { noComments, noRestatingComment, requireSuppressionReason } from "../src/oxlint-plugin.js";
 
 RuleTester.describe = (text, fn) => {
   describe(text, () => {
@@ -38,5 +38,56 @@ tester.run("no-restating-comment", noRestatingComment, {
     "// get the user\n// then the account\nconst user = getUser(id);",
     "/** @returns the user */\nconst user = getUser(id);",
     "// @ts-expect-error: the fixture is deliberately untyped\nconst user = getUser(id);",
+  ],
+});
+
+const ts = (code: string) => ({ code, filename: "module.ts" });
+
+tester.run("no-comments", noComments, {
+  invalid: [
+    { code: "// get the user\nconst user = getUser(id);", errors: 1 },
+    { code: "const total = count + 1; // total count", errors: 1 },
+    { code: "/* a block note */\nconst user = getUser(id);", errors: 1 },
+    { code: "/** Not exported */\nconst user = getUser(id);", errors: 1 },
+    { code: "/** Separated by a blank line */\n\nexport const user = 1;", errors: 1 },
+    { code: "// Line comment on an export\nexport const user = 1;", errors: 1 },
+    {
+      code: "const config = {\n  /** A property of a plain object */\n  retries: 3,\n};",
+      errors: 1,
+    },
+    { code: "const a = 1;\n// Copyright 2026 Maxime Sahroui\nconst b = 2;", errors: 1 },
+    { code: "// SAFETY: no assertion follows\nconst user = getUser(id);", errors: 1 },
+    ts("// SAFETY: the next statement has no assertion\nfoo();\nconst user = value as User;"),
+    ts("// SAFETY: const assertions need no justification\nconst modes = ['a'] as const;"),
+    { code: "// EXTERNAL: Safari drops the cookie, see the WebKit bug\nsetCookie();", errors: 1 },
+    { code: "// See https://example.com/issue/1\nsetCookie();", errors: 1 },
+    ts(
+      "/** @param {string} id typed JSDoc on an internal TypeScript function */\nconst load = (id: string) => id;",
+    ),
+    { code: "// TODO: fine for now\nretry();\n// FIXME later\nretry();", errors: 2 },
+    { code: "// global state lives here\nconst state = {};", errors: 1 },
+  ].map((test) => ("errors" in test ? test : { ...test, errors: 1 })),
+  valid: [
+    "// Copyright (c) 2026 Maxime Sahroui. MIT License\nconst user = 1;",
+    "#!/usr/bin/env node\n/* SPDX-License-Identifier: MIT */\nrun();",
+    "/** Loads the user, cache first */\nexport const loadUser = (id) => cache.get(id);",
+    "/** The default export */\nexport default function load() {}",
+    ts("export interface User {\n  /** Primary key */\n  id: string;\n}"),
+    ts("type Options = {\n  /** Milliseconds */\n  timeout: number;\n};"),
+    ts(
+      "class Cache {\n  /** Entries by key */\n  entries = new Map();\n\n  /** Clears every entry */\n  clear() {}\n}",
+    ),
+    ts("enum Mode {\n  /** Read only */\n  Read,\n}"),
+    "/** @param {string} word a word\n * @returns {string} its stem */\nconst stem = (word) => word;",
+    "/** @type {Set<number>} */\nconst seen = new Set();",
+    "// oxlint-disable-next-line no-console -- the CLI prints its report\nconsole.log(1);",
+    ts("// @ts-expect-error: the fixture is deliberately untyped\nconst user = getUser(id);"),
+    "/* @vite-ignore */\nimport(path);",
+    "/* globals window */\nwindow.x = 1;",
+    ts("// SAFETY: the schema validated the payload above\nconst user = payload as User;"),
+    ts("const user = {\n  // SAFETY: parsed by the schema\n  name: raw as string,\n};"),
+    ts("// SAFETY: checked by isUser\nexport const user = <User>payload;"),
+    "// EXTERNAL: Safari drops the cookie without SameSite, https://bugs.webkit.org/show_bug.cgi?id=1\nsetCookie();",
+    "/*\n * EXTERNAL: RFC 9110 requires the Allow header on a 405, https://www.rfc-editor.org/rfc/rfc9110\n */\nrespond();",
   ],
 });

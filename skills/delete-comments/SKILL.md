@@ -26,10 +26,12 @@ Read each comment with the code around it, then give it exactly one category:
 
 Contracts are the only comments that stay:
 
-- License headers.
-- JSDoc that defines a public API, or that the base lint rules require on a member.
-- A constraint forced by an external dependency, platform or protocol, ideally with an issue or RFC link.
+- License headers: the first comment of the file, naming the license or copyright.
+- JSDoc that defines a public API (right above an `export`), or that the base lint rules require on a member (interface, type, class, enum). In JavaScript files, JSDoc type tags (`@type`, `@param {…}`), which are the types.
+- A constraint forced by an external dependency, platform or protocol, written `// EXTERNAL: <why>, https://<issue, RFC or vendor doc>`.
 - A lint suppression with a `-- reason`, or a `// SAFETY:` comment before a type assertion.
+
+The `comments/no-comments` rule of quality-gate checks exactly this list, and `comments-baseline.json` holds the comments each file still has (README, "Comment ratchet"). Rewrite a real external constraint into the `EXTERNAL:` form instead of deleting it.
 
 When unsure between Contract and anything else, the comment is not a contract. A surprise in our own code is never a contract: it is an Excuse, and the fix is a rename, an extraction or a type.
 
@@ -40,7 +42,8 @@ When unsure between Contract and anything else, the comment is not a contract. A
 3. Excuse: delete the comment, then file one issue per hack with `gh issue create`: title, the file and line, what the hack does, and what the proper fix is. Group comments that excuse the same hack into one issue.
 4. Decision record: create the ADR with `create-adr` (`pnpm dlx create-adr "<decision title>"`, written to `docs/adr/`), fill in its context, decision and consequences from the comment and the code, then delete the comment.
 5. Run `vp check` and `vp test`: deleting a comment must not change behavior.
-6. Commit as `chore: delete code comments` (internal, no changeset), separate from any code change.
+6. Run `vp exec quality-gate comments` (`node bin/quality-gate.js comments` in quality-gate): it tightens `comments-baseline.json` for the files that dropped. It must report no file above its baseline.
+7. Commit the deletions and the tightened baseline as `chore: delete code comments` (internal, no changeset), separate from any code change.
 
 ## Report
 

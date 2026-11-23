@@ -1,0 +1,19 @@
+{
+  "bin/quality-gate.js": 1,
+  "configs/commitlint.config.js": 2,
+  "scripts/changesets.js": 1,
+  "scripts/check-package.js": 5,
+  "scripts/check-version.js": 4,
+  "scripts/cli.js": 4,
+  "scripts/coverage.js": 3,
+  "scripts/guards.js": 1,
+  "scripts/release-notes.js": 2,
+  "scripts/report.js": 1,
+  "src/oxlint-plugin.js": 1,
+  "src/vite.js": 6,
+  "tests/changesets.test.ts": 2,
+  "tests/check-package.test.ts": 3,
+  "tests/cli.test.ts": 1,
+  "tests/coverage.test.ts": 2,
+  "tests/report.test.ts": 2
+}

@@ -18,11 +18,8 @@ const strip = stripVTControlCharacters;
  * @typedef {{ label: string, skipped: string }
  *   | { label: string, check: () => CheckResult }
  *   | { label: string, command: Command }} Gate
- * @typedef {{
- *   deadcode: () => Command,
- *   duplication: () => Command,
- *   secrets: (files?: string[]) => Command,
- * }} Tools
+ * @typedef {{ comments: () => Command, deadcode: () => Command, duplication: () => Command }} RepoTools
+ * @typedef {RepoTools & { secrets: (files?: string[]) => Command }} Tools
  */
 
 /**
@@ -136,6 +133,7 @@ const gates = ({ tools, setup, baseline, installed }) => [
           },
         label: "Coverage (no drop)",
       },
+  { command: tools.comments(), label: "Comments (no rise)" },
   { command: tools.deadcode(), label: "Dead code / unused deps" },
   { command: tools.duplication(), label: "Duplication" },
   { command: tools.secrets(), label: "Secrets" },
