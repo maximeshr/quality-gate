@@ -15,5 +15,6 @@ export default defineConfig({
   test: {
     ...base.test,
     coverage: { ...base.test.coverage, include: ["src/**", "scripts/**", "bin/**"] },
+    setupFiles: ["tests/setup.ts"],
   },
 });
