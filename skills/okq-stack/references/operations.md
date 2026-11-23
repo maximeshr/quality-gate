@@ -36,7 +36,7 @@ Conventional Commits, present tense, lowercase subject: `fix: keep the focus rin
 
 - pre-commit: secretlint and `vp check --fix --deny-warnings` on the staged files;
 - commit-msg: commitlint;
-- pre-push: full `vp check`, tests, Knip, jscpd (plus the project's own, e.g. okq.me's `vp run verify`).
+- pre-push: full `vp check`, tests, the comment ratchet, Knip, jscpd (plus the project's own, e.g. okq.me's `vp run verify`).
 
 A hook failure is information: fix the cause, do not `--no-verify`.
 

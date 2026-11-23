@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { report } from "../scripts/report.js";
 
 const tools = {
+  comments: (): [string, string[]] => ["quality-gate", ["comments"]],
   deadcode: (): [string, string[]] => ["knip", []],
   duplication: (): [string, string[]] => ["jscpd", ["--config", "jscpd.json"]],
   secrets: (): [string, string[]] => ["secretlint", ["**/*"]],
@@ -70,6 +71,7 @@ describe(report, () => {
       calls: [
         "vp check --deny-warnings",
         "vp test --coverage",
+        "quality-gate comments",
         "knip",
         "jscpd --config jscpd.json",
         "secretlint **/*",
@@ -97,6 +99,19 @@ describe(report, () => {
       "<details open><summary>❌ Dead code / unused deps</summary>\n\n```text\nknip failed\nsecond line\n```",
     );
     expect(markdown).toContain("<summary>❌ Secrets</summary>");
+  });
+
+  it("runs the comment ratchet as its own gate", () => {
+    project({ name: "app" });
+
+    const { markdown, failed } = report({
+      tools,
+      exec: fakeExec(["quality-gate comments"]).exec,
+      onPath: () => false,
+    });
+
+    expect(failed).toBeTruthy();
+    expect(markdown).toContain("| ❌ | Comments (no rise) | `quality-gate comments` |");
   });
 
   it("skips Semgrep when it is not installed, and the build without a build script", () => {

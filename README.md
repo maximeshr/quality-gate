@@ -25,16 +25,17 @@ The base configuration only changes when a rule is wrong for every project. A pr
 
 ### Gates
 
-| Gate                           | Tool                                                                                                 | Config                                                |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with the [lint rules](#lint-rules), TypeScript) | `quality-gate/vite`                                   |
-| Tests + coverage               | `vp test --coverage`                                                                                 | `quality-gate/vite`                                   |
-| Coverage (no drop)             | line coverage may not drop by more than 0.5 point against the base branch (pull requests)            | —                                                     |
-| Dead code, unused dependencies | Knip                                                                                                 | zero-config (`knip.json` only for structural entries) |
-| Duplication                    | jscpd on `src/` (Markdown excluded): fails above 5 % duplicated, not on each clone                   | `configs/jscpd.json`                                  |
-| Secrets                        | secretlint, recommended preset                                                                       | `configs/secretlintrc.json`                           |
-| SAST                           | Semgrep `p/typescript` + `p/nodejs` (CI only)                                                        | —                                                     |
-| Build                          | `vp run build`, when the project has a `build` script                                                | the project                                           |
+| Gate                           | Tool                                                                                                      | Config                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Format + lint + types          | `vp check --deny-warnings` (Oxfmt, type-aware Oxlint with the [lint rules](#lint-rules), TypeScript)      | `quality-gate/vite`                                   |
+| Tests + coverage               | `vp test --coverage`                                                                                      | `quality-gate/vite`                                   |
+| Coverage (no drop)             | line coverage may not drop by more than 0.5 point against the base branch (pull requests)                 | —                                                     |
+| Comments (no rise)             | no file may have more comments than `comments-baseline.json` allows ([comment ratchet](#comment-ratchet)) | `comments-baseline.json`                              |
+| Dead code, unused dependencies | Knip                                                                                                      | zero-config (`knip.json` only for structural entries) |
+| Duplication                    | jscpd on `src/` (Markdown excluded): fails above 5 % duplicated, not on each clone                        | `configs/jscpd.json`                                  |
+| Secrets                        | secretlint, recommended preset                                                                            | `configs/secretlintrc.json`                           |
+| SAST                           | Semgrep `p/typescript` + `p/nodejs` (CI only)                                                             | —                                                     |
+| Build                          | `vp run build`, when the project has a `build` script                                                     | the project                                           |
 
 Commit messages follow Conventional Commits (`configs/commitlint.config.js`). The report runs every gate even when one fails, and lists each failure with its output.
 
@@ -104,9 +105,32 @@ The base config lints with three rule sets, all at `error`, written for code tha
 - anti-slop has no official npm package: its README asks to vendor it. Ultracite's copy is that vendored build. Never install the `oxlint-plugin-anti-slop` npm package: it is not Dillon Mulroy's.
 - The comment plugins are loaded from absolute paths, so the project installs nothing besides quality-gate.
 - `comments/no-restating-comment` flags a one-line comment whose every word, minus filler words, already appears in the code it sits on or above (`// get the user` over `const user = getUser(id)`). Delete it or say _why_ the code is this way.
+- `comments/no-comments` reports every comment except the contracts of the `delete-comments` skill (see [Comment ratchet](#comment-ratchet)). It is not in `vp check`: the ratchet runs it.
 - `comments/require-suppression-reason` wants `// oxlint-disable-next-line <rule> -- <why the rule is wrong here>`. A suppression is for a rule that is wrong at that line, not for code that is hard to fix.
 - Most findings are fixable: run `vp check --fix`, then `vp lint --fix --fix-suggestions` for the suggestion fixes (blank lines, `toStrictEqual`), and fix the rest by hand. Review the suggestion fixes: `vitest/consistent-test-it` renames `test` to `it` without updating the import.
 - Ultracite, `oxlint` and `@oxlint/plugins` follow the Oxlint bundled with vite-plus (a newer Ultracite can name rules an older Oxlint lacks: `Rule '…' not found`). Upgrade them together with vite-plus, in quality-gate and in every project.
+
+### Comment ratchet
+
+`comments/no-comments` enforces the `delete-comments` skill mechanically. It reports every comment except these contracts:
+
+| Contract            | What the rule checks                                                                                                                                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| License header      | the first comment of the file (after a shebang), containing `copyright`, `license`, `SPDX`, `©` or `(c)`                                                                                        |
+| JSDoc on an export  | a `/** */` block right above an `export` (no blank line between), which `no-comment-slop/prefer-jsdoc-for-exports` asks for                                                                     |
+| JSDoc on a member   | a `/** */` block right above a member of an interface, type literal, class or enum, which `no-comment-slop/require-member-docs` can require                                                     |
+| JSDoc types         | in a JavaScript file only, a `/** */` block with a type tag (`@type`, `@typedef`, `@template`, `@param {…}`, `@returns {…}`): it is the type                                                    |
+| Type assertion      | a comment starting with `SAFETY:` right above the statement holding a type assertion (`as const` excluded), as anti-slop asks                                                                   |
+| External constraint | a comment starting with `EXTERNAL:`, then the reason and an `https://` link to the issue, RFC or vendor doc: `// EXTERNAL: Safari drops the cookie without SameSite, https://bugs.webkit.org/…` |
+| Tool directive      | `oxlint-disable`, `eslint-disable`, `@ts-expect-error`, `/// <reference>`, `@vite-ignore`, `c8 ignore`, ...: other rules check their reason                                                     |
+
+Existing projects cannot drop every comment at once, so the rule runs as a ratchet instead of in `vp check`. `comments-baseline.json`, at the project root and committed, holds the comment count of each file:
+
+- `quality-gate comments` counts what the rule reports in each file the project lints, and fails when a file has more than its baseline. A file missing from the baseline (a new file) is allowed zero.
+- When a file drops below its baseline, or is deleted, the command writes the tightened baseline and fails until it is committed: the committed baseline only goes down.
+- `quality-gate comments --reset` writes the current counts as the baseline: once when adopting the ratchet, or to accept a rise on purpose (the pull request diff shows it).
+
+It runs in the pre-push hook and in the report (Comments (no rise)). Delete comments with the `delete-comments` skill, then commit the tightened baseline with the change.
 
 ### Git hooks
 
@@ -120,6 +144,7 @@ vp exec quality-gate commitlint --edit "$1"
 # .vite-hooks/pre-push
 vp check --deny-warnings
 vp test
+vp exec quality-gate comments
 vp exec quality-gate deadcode
 vp exec quality-gate duplication
 ```
@@ -185,6 +210,8 @@ Keep `package.json` scripts to this baseline. `vp check` and `vp test` are built
 `check-version` fails when the `package.json` version was edited by hand (neither published nor in `CHANGELOG.md`); run it in CI. `check-package` packs the project, then runs publint (strict) and attw on the tarball npm receives (`--profile esm-only` by default); `release` runs it before publishing. Both replace the `scripts/check-*.mjs` copies: drop them, and drop `publint` and `@arethetypeswrong/cli` from the dev dependencies.
 
 ### First report
+
+Write the comment baseline first: `vp exec quality-gate comments --reset`, then commit `comments-baseline.json`.
 
 Run `vp exec quality-gate report` locally (it writes `quality-report.md`), then fix what it finds in the project. Typical first findings: exports only used in their own file (Knip), dead code, a missing `@vitest/coverage-v8`.
 
@@ -328,6 +355,8 @@ quality-gate report [file] [--setup "cmd"] [--base ref] [--baseline coverage-sum
                                            since ref; --baseline shows the coverage change and fails when line
                                            coverage drops by more than 0.5 point
 quality-gate secrets [files...]            secretlint with the base config
+quality-gate comments [--reset]            fail when a file has more comments than comments-baseline.json,
+                                           tighten the baseline when counts drop; --reset rewrites it
 quality-gate deadcode                      knip
 quality-gate duplication                   jscpd with the base config
 quality-gate commitlint [args...]          commitlint with the conventional config (e.g. --edit "$1")

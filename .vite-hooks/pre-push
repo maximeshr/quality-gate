@@ -1,4 +1,5 @@
 vp check --deny-warnings
 vp test
+node bin/quality-gate.js comments
 node bin/quality-gate.js deadcode
 node bin/quality-gate.js duplication

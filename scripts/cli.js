@@ -9,6 +9,7 @@ import { parseArgs } from "node:util";
 import { checkChangesets, isInternal } from "./changesets.js";
 import { checkPackage } from "./check-package.js";
 import { checkVersion } from "./check-version.js";
+import { countComments, ratchetComments } from "./comments.js";
 import { isObject, isString } from "./guards.js";
 import { releaseNotes } from "./release-notes.js";
 import { report } from "./report.js";
@@ -23,6 +24,8 @@ export const USAGE = `Usage: quality-gate <command>
                                 --base lists the coverage of the files changed since that ref;
                                 --baseline compares the coverage with the base branch's summary
                                 and fails when line coverage drops by more than 0.5 point
+  comments [--reset]            fail when a file has more comments than comments-baseline.json,
+                                tighten the baseline when counts drop; --reset rewrites it
   secrets [files...]            secretlint with the base config
   deadcode                      knip
   duplication                   jscpd with the base config
@@ -78,6 +81,7 @@ const tools = {
   /** @param {string[]} args Arguments for commitlint */
   commitlint: (args) =>
     node("@commitlint/cli", ["--config", config("commitlint.config.js"), ...args], "commitlint"),
+  comments: () => [process.execPath, [path.join(root, "bin", "quality-gate.js"), "comments"]],
   deadcode: () => node("knip", []),
   duplication: () =>
     // No --exit-code: jscpd then fails only above the config threshold (5 %), not on every clone
@@ -105,23 +109,27 @@ const run = ([command, args]) => {
 /** @type {{ type: "string" }} */
 const string = { type: "string" };
 
+/** @type {{ type: "boolean" }} */
+const boolean = { type: "boolean" };
+
 /**
  * Options of each command that parses its own. `secrets` and `commitlint` pass their
  * arguments through to the tool untouched
  *
- * @type {Record<string, { options?: Record<string, { type: "string" }>, positionals?: number }>}
+ * @type {Record<string, { options?: Record<string, { type: "string" | "boolean" }>, positionals?: number }>}
  */
 const COMMANDS = {
   "check-changesets": { options: { base: string, title: string } },
   "check-package": { options: { profile: string } },
   "check-version": {},
+  comments: { options: { reset: boolean } },
   deadcode: {},
   duplication: {},
   "release-notes": { options: { from: string, output: string, repo: string, to: string } },
   report: { options: { base: string, baseline: string, setup: string }, positionals: 1 },
 };
 
-/** @typedef {Record<string, string | undefined>} Values Option values, by option name */
+/** @typedef {Record<string, string | boolean | undefined>} Values Option values, by option name */
 
 /**
  * Parses a command's arguments: unknown options and extra arguments are errors.
@@ -221,6 +229,19 @@ const checkPackageCommand = async (values) => {
 };
 
 /**
+ * @param {Values} values Options of `comments`
+ * @returns {number} The exit code
+ */
+const commentsCommand = (values) => {
+  const counts = countComments({ oxlint: toolBin("oxlint") });
+  const { ok, output } = ratchetComments({ counts, reset: values.reset === true });
+
+  (ok ? console.log : console.error)(output);
+
+  return ok ? 0 : 1;
+};
+
+/**
  * @param {Values} values Options of `release-notes`
  * @returns {number} The exit code
  */
@@ -249,6 +270,10 @@ const runCommand = async (command, { values, positionals }) => {
   switch (command) {
     case "report": {
       return reportCommand(values, positionals);
+    }
+
+    case "comments": {
+      return commentsCommand(values);
     }
 
     case "deadcode": {

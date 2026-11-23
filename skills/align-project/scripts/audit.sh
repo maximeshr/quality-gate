@@ -115,6 +115,8 @@ else
   check "no lint suppression without a -- reason" "! git -C $DIR grep -nE '(eslint|oxlint)-disable' -- '*.ts' '*.tsx' '*.js' '*.mjs' '*.astro' ':!*.d.ts' | grep -vE -- '--\\s*\\S' | grep -q ."
   check ".vite-hooks/pre-commit runs vp staged" "grep -q 'vp staged' $DIR/.vite-hooks/pre-commit"
   check ".vite-hooks/commit-msg runs commitlint" "grep -q '$QG_CLI commitlint' $DIR/.vite-hooks/commit-msg"
+  check ".vite-hooks/pre-push runs the comment ratchet" "grep -q '$QG_CLI comments' $DIR/.vite-hooks/pre-push"
+  check "comments-baseline.json present (comment ratchet)" "[ -f $DIR/comments-baseline.json ]"
   check ".vite-hooks/pre-push runs Knip and jscpd" "grep -q '$QG_CLI deadcode' $DIR/.vite-hooks/pre-push && grep -q '$QG_CLI duplication' $DIR/.vite-hooks/pre-push"
   qwf="$DIR/.github/workflows/quality.yml"; [ "$SELF" = 1 ] && qwf="$DIR/.github/workflows/ci.yml"
   check "$(basename "$qwf") calls reusable-report and reusable-changesets" "grep -q reusable-report.yml $qwf && grep -q reusable-changesets.yml $qwf"

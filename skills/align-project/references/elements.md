@@ -4,7 +4,7 @@ Every element of a project that the OKQ stack defines, in migration order. For e
 
 ## Contents
 
-- [Files and tooling](#files-and-tooling): package manager, runtime and module format, Vite+, quality-gate, base config, scripts, git hooks, dependency policy
+- [Files and tooling](#files-and-tooling): package manager, runtime and module format, Vite+, quality-gate, base config, lint rules, comment ratchet, scripts, git hooks, dependency policy
 - [CI and releases](#ci-and-releases): CI workflows, Changesets, release workflow, npm publishing, Dependabot
 - [Repository settings](#repository-settings): branches, merging, rulesets, automation, security
 - [Hosting](#hosting)
@@ -50,6 +50,13 @@ Every element of a project that the OKQ stack defines, in migration order. For e
 - **Migrate**, after upgrading quality-gate, in this order, one commit each: (1) `vp check --fix` (`style: apply the base lint fixes`); (2) `vp lint --fix --fix-suggestions`, reviewed line by line (`refactor: apply the base lint suggestions`); (3) hand fixes, grouped by rule (`refactor: <rule family>`); (4) comments: delete what restates the code, shorten the rest to the _why_. Run `vp test` after each step.
 - **Watch**: a published package keeps its public API (an anti-slop rename of an exported symbol is breaking: keep it, or `@alias` + changeset); `vitest/consistent-test-it` renames `test` → `it` without the import; `require-readable-spacing` and `sort-keys` touch many lines, keep them in the mechanical commits; a rule that is wrong for every project is a quality-gate pull request, not a suppression.
 
+### Comment ratchet
+
+- **Target**: `comments-baseline.json` committed at the root, at or below the counts of `vp exec quality-gate comments`; `pre-push` runs the ratchet; the baseline only goes down.
+- **Detect**: "comments-baseline.json present", ".vite-hooks/pre-push runs the comment ratchet"; `vp exec quality-gate comments` passes.
+- **Migrate**: after upgrading quality-gate, `vp exec quality-gate comments --reset` and commit the baseline alone (`chore: add the comment baseline`). Then lower it file by file with the `delete-comments` skill, never in the same commit as a code change. Rewrite real external constraints as `// EXTERNAL: <why>, https://<link>`.
+- **Watch**: never `--reset` to get a rise through: delete the comment or argue the rise in the pull request; a deleted file leaves the baseline stale until the tightened file is committed.
+
 ### Scripts
 
 - **Target**: every project `prepare: "vp config"` (+ the type generator when needed); libraries `build`, `dev`, `prepublishOnly`, `check:version: quality-gate check-version`, `check:package: quality-gate check-package`, `release: vp pack && vp run check:package && changeset publish`; apps their framework's `build` / `dev`. No `check`, `test`, `changeset`, `version-packages` scripts.
@@ -58,7 +65,7 @@ Every element of a project that the OKQ stack defines, in migration order. For e
 
 ### Git hooks
 
-- **Target**: `.vite-hooks/pre-commit` `vp staged`; `commit-msg` `vp exec quality-gate commitlint --edit "$1"`; `pre-push` full `vp check`, `vp test`, `vp exec quality-gate deadcode`, `vp exec quality-gate duplication` (or the project's own verify script plus Knip and jscpd).
+- **Target**: `.vite-hooks/pre-commit` `vp staged`; `commit-msg` `vp exec quality-gate commitlint --edit "$1"`; `pre-push` full `vp check`, `vp test`, `vp exec quality-gate comments`, `vp exec quality-gate deadcode`, `vp exec quality-gate duplication` (or the project's own verify script plus the comment ratchet, Knip and jscpd).
 - **Detect**: the three ".vite-hooks/…" checks.
 - **Migrate**: from husky: move each hook's commands to `.vite-hooks/<hook>`, lint-staged rules into the `staged` block (the base already has one), `prepare` → `vp config`, then remove husky. Check `git config core.hooksPath` = `.vite-hooks/_`.
 
