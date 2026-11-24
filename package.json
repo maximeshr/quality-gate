@@ -45,7 +45,7 @@
     "knip": "6.45.1",
     "oxlint": "1.94.0",
     "publint": "0.3.25",
-    "secretlint": "13.1.0",
+    "secretlint": "14.0.1",
     "ultracite": "8.2.0"
   },
   "devDependencies": {
