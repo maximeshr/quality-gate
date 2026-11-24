@@ -1,0 +1,5 @@
+---
+"quality-gate": patch
+---
+
+Dependencies: chore(deps): bump ultracite from 8.2.0 to 8.3.1 in the vite-plus group.
